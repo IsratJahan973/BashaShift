@@ -1,5 +1,8 @@
 # Verification evidence (2026-11-04, Bangladesh time)
 
+This is the historical structure-repair report for commit `1abb5ee`. For the
+current Supabase/authentication work, see [PHASE2_QA.md](PHASE2_QA.md).
+
 ## Repository repair
 
 The flattened upload was restored to its intended tracked layout: React code in

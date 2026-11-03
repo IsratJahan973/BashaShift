@@ -5,6 +5,7 @@ from playwright.sync_api import expect, sync_playwright
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--base-url', default='http://127.0.0.1:8787')
+parser.add_argument('--demo', action='store_true', help='Explicitly select the isolated demo when Supabase is configured')
 args = parser.parse_args()
 storage_key = 'bashashift-prototype-v1'
 
@@ -27,7 +28,7 @@ with sync_playwright() as p:
     def db():
         return page.evaluate('(key) => JSON.parse(localStorage.getItem(key))', storage_key)
 
-    page.goto(args.base_url)
+    page.goto(args.base_url + ('?demo=1' if args.demo else ''))
     expect(page.locator('.home-card')).to_have_count(6)
     health = page.request.get(args.base_url + '/api/health')
     assert health.ok and health.json()['ok'] is True

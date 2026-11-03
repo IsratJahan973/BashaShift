@@ -9,27 +9,50 @@ Don't claim to invent any of the individual components. The innovation claim is 
 ## Stack: minimal, credible, upgradeable
 
 - **Client:** React + Vite + ordinary CSS; React Router optional later. Current starter uses page state so it is simple to understand.
-- **Server API:** Node 20+ + Express. API secret kept in environment only.
+- **Server API:** Node 22+ + Express. Existing optional AI secret remains server-only; Phase 2 uses the Supabase browser SDK and database authorization.
 - **AI:** Vision-enabled OpenAI Responses API (`POST /api/scan`): extracts visible furniture categories with bounded quantities and explicit uncertainty. User edits. The AI does not set prices or assign workers.
-- **Database to add in Codex:** Supabase Postgres. Tables: `profiles`, `properties`, `viewing_inquiries`, `worker_profiles`, `moving_requests`, `moving_items`, `moving_offers`, `booking_events`, `reports`.
-- **Authentication:** Supabase Auth. Owners and renters may share one profile. Workers are separate verified service role. Consider OTP carefully based on available provider; never fake verification.
-- **Photo storage:** Supabase Storage. Public property photos only if consented; moving-inventory photos should be private and accessed via signed URLs.
-- **Notifications:** Realtime subscriptions / in-app badges (P1). No SMS integration in MVP.
+- **Database:** Supabase Postgres. Phase 2 tables: `profiles`, `properties`, `property_images`, `viewing_inquiries`, `moving_requests`, `moving_inventory`, `mover_offers`, and `bookings`. Migration and setup: `docs/SUPABASE_SETUP.md`.
+- **Authentication:** Supabase email/password Auth. Each account selects one immutable application role: owner, renter, or mover. These are not PostgreSQL privilege roles. Roles are read from database profiles, never trusted from editable Auth metadata. Email confirmation is supported; identity and phone verification/OTP are not implemented.
+- **Photo storage:** Private Supabase `property-images` bucket. Owners upload under their user/property IDs. Published listing photos can be read through short-lived signed URLs; drafts are restricted to their owner. Phase 2 does not store AI inventory photos.
+- **Refresh:** Published property changes use Realtime. Private request/contact tables are excluded from the publication; authorized records refresh on focus, every 15 seconds, or manually. No SMS integration.
 - **Hosting:** Node-enabled host for Express + React build; `.env` set through server environment. Use separate frontend/API if static hosting is desired.
 
-## Data model (conceptual)
+## Phase 2 data model
 
-```text
-auth.users (id)
-  ├─ profiles (id, display_name, phone, role)
-  ├─ properties (id, owner_id, title, area, rent, bedrooms, image_urls, status)
-  │   └─ viewing_inquiries (id, property_id, renter_id, preferred_date, status)
-  ├─ worker_profiles (user_id, service_areas[], categories[], availability, verification_status)
-  └─ moving_requests (id, renter_id, from_area, to_area, moving_date, contact_consent, status)
-       ├─ moving_items (id, request_id, category, quantity)
-       ├─ moving_offers (id, request_id, worker_id, amount, status)
-       └─ booking_events (id, actor_id, event, timestamp)
+```mermaid
+erDiagram
+  AUTH_USERS ||--|| PROFILES : owns
+  PROFILES ||--o{ PROPERTIES : owner
+  PROPERTIES ||--o{ PROPERTY_IMAGES : has
+  PROPERTIES ||--o{ VIEWING_INQUIRIES : receives
+  PROFILES ||--o{ VIEWING_INQUIRIES : renter
+  PROFILES ||--o{ MOVING_REQUESTS : renter
+  PROPERTIES o|--o{ MOVING_REQUESTS : destination
+  MOVING_REQUESTS ||--|{ MOVING_INVENTORY : contains
+  MOVING_REQUESTS ||--o{ MOVER_OFFERS : receives
+  PROFILES ||--o{ MOVER_OFFERS : mover
+  MOVING_REQUESTS ||--o{ BOOKINGS : history
+  MOVER_OFFERS ||--o{ BOOKINGS : selected
 ```
+
+Foreign keys bind a booking to its exact request/renter and offer/mover. Partial
+unique indexes allow one pending offer per mover/request and one active booking
+per request. Checks bound quantities, prices, roles, phone format, and states.
+A profile is created by a validated Auth signup trigger. The browser cannot
+insert a replacement profile, change roles, transfer property ownership, or
+forge booking states.
+
+RLS is enabled on all eight tables. `moving_requests` grants API roles SELECT on
+only safe columns; contact/name/precise-address/notes columns are never granted.
+`get_request_contact` authorizes the renter or a selected mover with consent.
+`get_property_contact` authorizes the owner or a renter with a viewing inquiry.
+`mover_summaries` exposes only the required mover summaries and limits phone
+access to selection participants. Profiles themselves are readable only by self.
+
+Cross-row transitions use narrowly scoped SECURITY DEFINER functions with empty
+search paths, explicit actor checks, and request-row locks. PUBLIC/anon function
+execution is revoked. Direct writes cannot bypass the transition rules. Offer
+insertion also locks/rechecks the request to prevent racing a closed selection.
 
 ## Booking lifecycle
 
@@ -43,7 +66,7 @@ DRAFT → OPEN (visible only to eligible area/category workers)
   CONFIRMED → COMPLETED / CANCELLED [post-MVP]
 ```
 
-**Concurrency:** implement a Postgres transaction or RPC to select an offer only if the moving request is `OPEN`. Don't rely on reading state from the browser to block a second booking.
+**Concurrency:** `select_mover_offer`, `reopen_moving_request`, and `confirm_booking` lock the request and update state transactionally. The active-booking unique index independently rejects competing active selections. Confirmation records a renter's self-reported phone agreement; it does not verify that a phone call occurred.
 
 **Worker privacy:** Workers see general origin area, moving date, basic item inventory and indicative price before selection. Do not expose customer name, exact address, or phone. After the renter selects the worker and consents, the worker can access the contact. The selected worker's phone is made available to the renter, with a visible warning if the account isn't verified.
 
