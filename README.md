@@ -17,7 +17,7 @@ The offline demo deliberately **does not** pretend to run AI. It is not a deploy
 Requires Node.js 20.19+ and internet for dependencies.
 
 ```bash
-npm install
+npm ci
 cp .env.example .env
 # Add OPENAI_API_KEY to the server's .env (not the frontend)
 npm run dev
@@ -25,7 +25,40 @@ npm run dev
 
 Open `http://localhost:5173`. The `npm run dev` script starts both Vite frontend and Express backend. `npm test` runs pure domain tests. `npm run build` builds production frontend; `npm start` serves built assets with the Node API on port 8787.
 
-**Note:** This build environment could not reach npm's registry (`EAI_AGAIN`). React JSX was syntax-parsed, and domain tests passed, but the dependency-based React build has not been verified here. Run `npm install && npm test && npm run build` on your own machine before using it for judges.
+Dependencies are locked in `package-lock.json`. Run `npm test` and `npm run build` after installation. See [`docs/QA_RESULTS.md`](docs/QA_RESULTS.md) for validation results and remaining limitations; live AI still requires a server-side key and a separate real-photo test.
+
+## Project layout
+
+```text
+src/                 React components, styles, demo data, and domain logic
+server/index.mjs     Express API and production dist/ serving
+tests/               Domain tests and optional browser smoke tests
+docs/                Requirements, architecture, handoff, QA, and screenshots
+.env.example         Server-only environment template
+index.html           Vite frontend entry
+standalone-demo.html Offline demo using src/styles.css
+standalone-selfcontained.html  Offline demo with embedded styles
+```
+
+Run Node commands from the repository root. The source files live in these tracked directories; no copied directory overlays are needed.
+
+## Browser smoke tests
+
+The optional browser tests require Python 3, Playwright, and Chromium:
+
+```bash
+python3 -m pip install -r tests/requirements.txt
+python3 -m playwright install chromium
+python3 tests/offline_smoke.py
+
+# Start the production app in another terminal first:
+npm run build
+npm start
+# Then run:
+python3 tests/react_smoke.py
+```
+
+For an existing Chromium installation, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to its executable instead of downloading a browser. The offline test starts and stops its own local HTTP server and tests both demo files. The React test uses a running app on port 8787 by default; pass `--base-url http://127.0.0.1:5173` to test `npm run dev` instead. Both tests use isolated browser contexts and real `localStorage`; they do not change your normal browser data or make phone calls.
 
 ## What exists now
 
