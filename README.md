@@ -14,33 +14,75 @@ The offline demo deliberately **does not** pretend to run AI. It is not a deploy
 
 ### Option B — React + API project for development in Codex
 
-Requires Node.js 20.19+ and internet for dependencies.
+Requires Node.js 22+ (24 recommended) and internet for dependencies.
 
 ```bash
-npm install
+npm ci
 cp .env.example .env
-# Add OPENAI_API_KEY to the server's .env (not the frontend)
+# Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY for shared accounts
+# Leave both blank to use the labeled local demo
 npm run dev
 ```
 
-Open `http://localhost:5173`. The `npm run dev` script starts both Vite frontend and Express backend. `npm test` runs pure domain tests. `npm run build` builds production frontend; `npm start` serves built assets with the Node API on port 8787.
+Open `http://localhost:5173`. The `npm run dev` script starts both Vite frontend and Express backend. `npm test` runs domain, Auth/configuration, and embedded PostgreSQL migration/RLS tests. `npm run build` builds production frontend; `npm start` serves built assets with the Node API on port 8787.
 
-**Note:** This build environment could not reach npm's registry (`EAI_AGAIN`). React JSX was syntax-parsed, and domain tests passed, but the dependency-based React build has not been verified here. Run `npm install && npm test && npm run build` on your own machine before using it for judges.
+Dependencies are locked in `package-lock.json`. Run `npm test` and `npm run build` after installation. See [`docs/PHASE2_QA.md`](docs/PHASE2_QA.md) for current validation results and remaining limitations; live AI still requires a server-side key and a separate real-photo test.
+
+## Supabase accounts and shared rentals
+
+Follow [`docs/SUPABASE_SETUP.md`](docs/SUPABASE_SETUP.md) to create a project, apply the migration, configure email login and public environment variables, and run local integration tests. Owners, renters, and movers have separate account roles. Customer contacts stay private until an authorized selection with consent. Live mode never mixes fictional demo records into the shared database.
+
+The Supabase SDK requires Node 22+. Never use a service-role or secret key in frontend configuration. See [`docs/PHASE2_QA.md`](docs/PHASE2_QA.md) for implemented behavior and the distinction between local and hosted validation.
+
+## Project layout
+
+```text
+src/                 React components, styles, demo data, and domain logic
+server/index.mjs     Express API and production dist/ serving
+tests/               Domain tests and optional browser smoke tests
+docs/                Requirements, architecture, handoff, QA, and screenshots
+.env.example         Public Supabase configuration + server-only environment template
+index.html           Vite frontend entry
+standalone-demo.html Offline demo using src/styles.css
+standalone-selfcontained.html  Offline demo with embedded styles
+```
+
+Run Node commands from the repository root. The source files live in these tracked directories; no copied directory overlays are needed.
+
+## Browser smoke tests
+
+The optional browser tests require Python 3, Playwright, and Chromium:
+
+```bash
+python3 -m pip install -r tests/requirements.txt
+python3 -m playwright install chromium
+python3 tests/offline_smoke.py
+
+# Start the production app in another terminal first:
+npm run build
+npm start
+# Then run:
+python3 tests/react_smoke.py
+```
+
+For an existing Chromium installation, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to its executable instead of downloading a browser. The offline test starts and stops its own local HTTP server and tests both demo files. The React test uses a running app on port 8787 by default; pass `--base-url http://127.0.0.1:5173` to test `npm run dev` instead. Both tests use isolated browser contexts and real `localStorage`; they do not change your normal browser data or make phone calls.
 
 ## What exists now
 
+Supabase behavior below is implemented in code; hosted Auth/Storage and the full multi-account live journey still require a configured project and integration verification. See `docs/PHASE2_QA.md`.
+
 | Feature | React starter | Offline demo |
 |---|---|---|
-| Property search and filters | Implemented (browser-local) | Implemented (browser-local) |
-| Owner publish property + photo | Implemented (browser-local) | Implemented (browser-local) |
-| Owner/tenant viewing inquiry | Implemented (browser-local) | Implemented (browser-local) |
+| Property search and filters | Shared Supabase records when configured; separate demo | Implemented (browser-local) |
+| Owner publish property + photo | Owner-scoped database + private photo storage integration | Implemented (browser-local) |
+| Owner/tenant viewing inquiry | Shared inquiries restricted to renter/property owner | Implemented (browser-local) |
 | Manual moving inventory / indicative price | Implemented | Implemented |
-| Location-matched worker job feed | Implemented (area match, not GPS) | Implemented (area match) |
-| Accept or counteroffer | Implemented | Implemented |
-| Customer chooses worker, phone confirm | Implemented workflow | Implemented workflow |
+| Location-matched worker job feed | Database area/availability matching; private contact excluded | Implemented (area match) |
+| Accept or counteroffer | Database-backed authorized offers | Implemented |
+| Customer chooses worker, phone confirm | Transactional selection/reopen/confirmation; self-reported call | Implemented workflow |
 | AI photo furniture recognition | Server endpoint implemented, **not live-tested**; requires API key | Not supported; truthfully disclosed |
-| Real accounts and multi-device shared database | **Not implemented** | **Not implemented** |
-| Identity verification, payments, production security | **Not implemented** | **Not implemented** |
+| Real accounts and multi-device shared database | Supabase integration; project setup required | Not supported |
+| Identity verification and payments | **Not implemented**; Phase 2 RLS is not a full production security audit | **Not implemented** |
 | Mandatory official sticker graphic | **Not included**. Visible text placeholder only. | Same |
 
 ### Safety and honest presentation
@@ -56,8 +98,9 @@ Open `http://localhost:5173`. The `npm run dev` script starts both Vite frontend
 
 - Frontend: React 19, Vite, CSS (no full UI library), Lucide icons.
 - API: Node.js + Express, server-side OpenAI Responses API for optional furniture identification.
-- Current demo data: `localStorage` for one-browser interaction.
-- Next production step: Supabase Postgres + Auth + Storage + RLS + realtime subscriptions.
+- Shared mode: Supabase Auth, Postgres, private photo storage, and database-enforced access policies.
+- Demo mode: separate, clearly labeled `localStorage` data.
+- Live AI and payments are outside Phase 2.
 - Deployment once database/auth are complete: a Node-hosted web service (e.g. Render) can run `npm run build` then `npm start` with the server-side API secret. Static-only hosting cannot run this Express API without a separate backend.
 
 ## Project handoff documents

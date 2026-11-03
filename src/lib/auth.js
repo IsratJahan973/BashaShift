@@ -1,0 +1,62 @@
+import { safePhone } from '../domain.js';
+
+export const roles = { owner: 'Property Owner', renter: 'Renter', mover: 'Moving Service Provider' };
+
+function validatePublicKey(key) {
+  if (key.startsWith('sb_secret_')) throw new Error('A server secret must never be used in the frontend.');
+  if (key.startsWith('sb_publishable_')) return;
+  let claims;
+  try { claims = JSON.parse(atob(key.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); }
+  catch { throw new Error('Use a Supabase publishable key or legacy anon key.'); }
+  if (claims.role !== 'anon') throw new Error('Only the public anon key is allowed in the frontend.');
+}
+
+export function readSupabaseConfig(env = {}) {
+  if (Object.entries(env).some(([name,value]) => value && /^VITE_.*(?:SERVICE_ROLE|SECRET|PASSWORD|PRIVATE_KEY|OPENAI_API_KEY)/i.test(name))) {
+    throw new Error('Server credentials must not use VITE_ variable names.');
+  }
+  const url = env.VITE_SUPABASE_URL?.trim() || '';
+  const key = (env.VITE_SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_ANON_KEY || '').trim();
+  for (const name of ['VITE_SUPABASE_PUBLISHABLE_KEY','VITE_SUPABASE_ANON_KEY']) {
+    if (env[name]?.trim()) validatePublicKey(env[name].trim());
+  }
+  if (!url && !key) return { configured: false, url: '', key: '' };
+  if (!url || !key) throw new Error('Set both the Supabase URL and public publishable key.');
+  const endpoint = new URL(url);
+  if (endpoint.username || endpoint.password || endpoint.search || endpoint.hash || endpoint.pathname !== '/') {
+    throw new Error('Use the base project URL without embedded credentials, query parameters, or paths.');
+  }
+  if (endpoint.protocol !== 'https:' && !(endpoint.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(endpoint.hostname))) {
+    throw new Error('Use HTTPS for a hosted Supabase project.');
+  }
+  return { configured: true, url: endpoint.href.replace(/\/$/, ''), key };
+}
+
+export function registrationData(form) {
+  if (!Object.hasOwn(roles, form.role)) throw new Error('Choose an account role.');
+  if (!form.display_name?.trim()) throw new Error('Enter your name.');
+  if (!safePhone(form.phone)) throw new Error('Enter a valid Bangladesh phone number.');
+  if (!form.email?.trim() || !form.email.includes('@')) throw new Error('Enter your email address.');
+  if (!form.password || form.password.length < 8) throw new Error('Use a password with at least 8 characters.');
+  return {
+    email: form.email.trim(), password: form.password,
+    options: { data: {
+      role: form.role, display_name: form.display_name.trim(),
+      phone: form.phone.replace(/\D/g, ''), service_area: form.service_area || 'Banasree',
+    } },
+  };
+}
+
+export async function registerAccount(client, form, redirectTo) {
+  const payload = registrationData(form);
+  if (redirectTo) payload.options.emailRedirectTo = redirectTo;
+  const { data, error } = await client.auth.signUp(payload);
+  if (error) throw error;
+  return { ...data, needsEmailConfirmation: !data.session };
+}
+
+export async function loginAccount(client, email, password) {
+  const { data, error } = await client.auth.signInWithPassword({ email: email.trim(), password });
+  if (error) throw error;
+  return data;
+}
