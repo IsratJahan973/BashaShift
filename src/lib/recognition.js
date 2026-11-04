@@ -24,7 +24,7 @@ export async function scanFurniture({ images,token,demoMode,signal,fetchImpl=fet
   let data;
   try{data=await response.json();}catch{throw new Error('Photo analysis is unavailable. Your manual inventory is unchanged.');}
   if(!response.ok)throw new Error(data.error || 'Photo analysis is unavailable. Enter items manually.');
-  if(data.source!=='openai' || !Array.isArray(data.items) || data.items.some(item=>!item || !Number.isInteger(item.qty) || item.qty<1 || item.qty>100 || !['high','medium','low'].includes(item.confidence))) {
+  if(!['cloudflare','openai'].includes(data.source) || data.reviewRequired!==true || !Array.isArray(data.items) || data.items.some(item=>!item || !Number.isInteger(item.qty) || item.qty<1 || item.qty>100 || !['high','medium','low'].includes(item.confidence))) {
     throw new Error('The photo analysis could not be read. Enter items manually.');
   }
   reviewInventory(data.items);

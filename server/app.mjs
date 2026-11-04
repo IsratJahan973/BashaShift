@@ -3,8 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {EnvHttpProxyAgent,fetch as proxyFetch} from 'undici';
-import {ScanError,recognizeFurniture,validatePhotos} from './ai.mjs';
+import {ScanError,validatePhotos} from './ai.mjs';
 import {createRenterVerifier} from './scan-auth.mjs';
+import {createFurnitureRecognizer} from './scan-provider.mjs';
 
 const proxyAgent=new EnvHttpProxyAgent();
 const outboundFetch=(url,init)=>proxyFetch(url,{...init,dispatcher:proxyAgent});
@@ -27,15 +28,14 @@ export function createApp({env=process.env,fetchImpl=outboundFetch,verifyRenter=
   app.set('trust proxy',env.RENDER==='true'?1:false);
   app.use((_req,res,next)=>{res.set('X-Content-Type-Options','nosniff');next();});
   app.use('/api',(_req,res,next)=>{res.set('Cache-Control','no-store');next();});
-  const key=env.OPENAI_API_KEY||env.BASHASHIFT_OPENAI_API_KEY;
-  const model=env.OPENAI_MODEL||'gpt-4.1-mini';
+  const recognizer=createFurnitureRecognizer({env,fetchImpl,timeoutMs});
   const demoAllowed=env.AI_ALLOW_DEMO_SCAN==='true'&&env.NODE_ENV==='development';
   const attempts=windowLimit(40,60000,clock),scans=windowLimit(scanLimit,60000,clock);
   let active=0;
-  app.get('/api/health',(_req,res)=>res.json({ok:true,aiConfigured:Boolean(key),aiRequiresRenterLogin:!demoAllowed,aiDemoEnabled:demoAllowed}));
+  app.get('/api/health',(_req,res)=>res.json({ok:true,aiConfigured:recognizer.configured,aiRequiresRenterLogin:!demoAllowed,aiDemoEnabled:demoAllowed}));
   app.post('/api/scan',async(req,res,next)=>{
     try{
-      if(!key)throw new ScanError(503,'ai_not_configured','AI photo analysis is not configured here. Add items manually.');
+      if(!recognizer.configured)throw new ScanError(503,'ai_not_configured','AI photo analysis is not configured here. Add items manually.');
       const retry=attempts(req.ip);
       if(retry){res.set('Retry-After',String(retry));throw new ScanError(429,'rate_limited','Too many attempts. Wait a minute or enter items manually.');}
       const loopback=['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
@@ -60,7 +60,7 @@ export function createApp({env=process.env,fetchImpl=outboundFetch,verifyRenter=
     const disconnected=()=>{if(!res.writableEnded)controller.abort();};res.on('close',disconnected);
     try{
       const images=await validatePhotos(req.body);
-      const data=await recognizeFurniture({images,key,model,fetchImpl,timeoutMs,signal:controller.signal});
+      const data=await recognizer.recognize({images,signal:controller.signal});
       if(!res.destroyed)res.json(data);
     }catch(error){if(!res.destroyed)next(error);}
     finally{active--;res.off('close',disconnected);}

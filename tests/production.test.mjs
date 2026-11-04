@@ -10,11 +10,11 @@ import { fileURLToPath } from 'node:url';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
 const publicEnv={NODE_ENV:'production',RENDER:'true',VITE_SUPABASE_URL:'https://fixture.supabase.co',VITE_SUPABASE_PUBLISHABLE_KEY:'sb_publishable_test_fixture',VITE_SUPABASE_ANON_KEY:'',
-  SUPABASE_URL:'',SUPABASE_PUBLISHABLE_KEY:'',SUPABASE_ANON_KEY:'',OPENAI_API_KEY:'',BASHASHIFT_OPENAI_API_KEY:'',AI_ALLOW_DEMO_SCAN:'true'};
+  SUPABASE_URL:'',SUPABASE_PUBLISHABLE_KEY:'',SUPABASE_ANON_KEY:'',OPENAI_API_KEY:'',BASHASHIFT_OPENAI_API_KEY:'',CLOUDFLARE_ACCOUNT_ID:'',CLOUDFLARE_AI_TOKEN:'',AI_ENABLE_OPENAI_FALLBACK:'false',AI_ALLOW_DEMO_SCAN:'true'};
 async function fixture(frontend=true){
   const directory=await mkdtemp(path.join(tmpdir(),'bashashift-production-'));
   await mkdir(path.join(directory,'server'));
-  for(const name of ['index.mjs','app.mjs','ai.mjs','scan-auth.mjs'])await copyFile(path.join(root,'server',name),path.join(directory,'server',name));
+  for(const name of ['index.mjs','app.mjs','ai.mjs','scan-auth.mjs','cloudflare-ai.mjs','scan-provider.mjs'])await copyFile(path.join(root,'server',name),path.join(directory,'server',name));
   await symlink(path.join(root,'node_modules'),path.join(directory,'node_modules'),'dir');
   await symlink(path.join(root,'src'),path.join(directory,'src'),'dir');
   if(frontend){
