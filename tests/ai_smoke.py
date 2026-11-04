@@ -1,4 +1,4 @@
-"""Real photo-upload route with mocked OpenAI, and a browser-local moving request."""
+"""Real photo-upload route with mocked Cloudflare, and a browser-local moving request."""
 import argparse
 import os
 from pathlib import Path

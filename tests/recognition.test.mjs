@@ -23,11 +23,19 @@ test('scan client sends photo permission and a session header; failures do not s
   let request;
   const items=[{name:'Bed',qty:2,confidence:'medium'}];
   assert.deepEqual(await scanFurniture({images:['photo'],token:'session-token',demoMode:false,fetchImpl:async(url,init)=>{
-    request={url,...init};return new Response(JSON.stringify({source:'openai',items}),{status:200});
+    request={url,...init};return new Response(JSON.stringify({source:'openai',reviewRequired:true,items}),{status:200});
   }}),items);
   assert.equal(request.url,'/api/scan');assert.equal(request.headers.Authorization,'Bearer session-token');
   assert.deepEqual(JSON.parse(request.body),{images:['photo'],consent:true});
   assert.equal(Object.hasOwn(request.headers,'OPENAI_API_KEY'),false);
   await assert.rejects(scanFurniture({images:['photo'],demoMode:true,fetchImpl:async()=>new Response(JSON.stringify({error:'AI is not configured'}),{status:503})}),/not configured/);
   await assert.rejects(scanFurniture({images:['photo'],demoMode:true,fetchImpl:async()=>new Response('not JSON',{status:200})}),/unavailable/);
+});
+
+test('Cloudflare suggestions require an explicit review flag and supported quantities before the renter can apply them',async()=>{
+  const items=[{name:'Sofa',qty:2,confidence:'medium'}];
+  assert.deepEqual(await scanFurniture({images:['photo'],token:'renter-token',fetchImpl:async()=>Response.json({source:'cloudflare',reviewRequired:true,items})}),items);
+  for(const data of [{source:'cloudflare',items},{source:'cloudflare',reviewRequired:false,items},{source:'mock',reviewRequired:true,items},{source:'cloudflare',reviewRequired:true,items:[{name:'Sofa',qty:'2',confidence:'medium'}]}]){
+    await assert.rejects(scanFurniture({images:['photo'],fetchImpl:async()=>Response.json(data)}),/could not be read/);
+  }
 });

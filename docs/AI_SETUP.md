@@ -5,7 +5,7 @@ and does not change RLS, contact permissions, offers, or booking transitions.
 
 ## Setup
 
-1. Use Node 22+ (24 recommended), run `npm ci`, and copy `.env.example` to `.env`.
+1. Use Node 24, run `npm ci`, and copy `.env.example` to `.env`.
 2. For shared accounts, follow `SUPABASE_SETUP.md`. Set the **base project URL**
    (`https://<project-ref>.supabase.co`, without a dashboard/API path) and its
    public publishable key in `VITE_SUPABASE_URL` and
@@ -13,14 +13,20 @@ and does not change RLS, contact permissions, offers, or booking transitions.
    values to verify the renter's session and protected profile role. Server-only
    `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY` are supported alternatives. No
    service-role key is required. Do not change a hosted database for Phase 3.
-3. Set `OPENAI_API_KEY` **only on the Node server**. The managed cloud secret
-   binding reserves `OPENAI_*` names, so it can use the backend-only alias
-   `BASHASHIFT_OPENAI_API_KEY` instead. Set only one key variable. Neither name
-   belongs in `VITE_*`, frontend code, Git, or browser storage.
-4. Optional `OPENAI_MODEL` defaults to `gpt-4.1-mini`. The account/model must
-   support images and structured Responses API output. Allow HTTPS to
-   `api.openai.com` and the exact Supabase project hostname. The Node API honors
-   inherited HTTP(S) proxy settings and TLS trust; do not disable verification.
+3. Set server-only `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AI_TOKEN` for
+   `@cf/meta/llama-3.2-11b-vision-instruct`. The token needs Workers AI Read/Edit
+   permissions. The account owner must first accept the model's Meta license/AUP;
+   the app never accepts terms automatically. See the [official model schema](https://developers.cloudflare.com/workers-ai/models/llama-3.2-11b-vision-instruct/).
+   Express sends sanitized JPEG data as the model's single `image` input plus
+   `prompt`, and reads the REST envelope's `result.response`. Multiple photos are
+   combined into one bounded contact sheet so views are considered together.
+4. OpenAI is optional backup only: set `AI_ENABLE_OPENAI_FALLBACK=true` and
+   backend `OPENAI_API_KEY` (or `BASHASHIFT_OPENAI_API_KEY`) to opt in. A key alone
+   never triggers OpenAI. `OPENAI_MODEL` defaults to `gpt-4.1-mini`. Both providers
+   share the scan deadline; cancellation never starts a backup request. Never put
+   any provider credentials in `VITE_*`, Git, frontend code, or browser storage.
+   Allow HTTPS to `api.cloudflare.com`, the exact Supabase project hostname, and
+   `api.openai.com` only if backup is enabled. Preserve proxy and TLS trust.
 5. Run `npm run dev`, or `npm run build` followed by `npm start` (port 8787).
    Serve the frontend and `/api` together; Vite proxies `/api` during development.
    Restart Node after changing server variables; rebuild after changing public
@@ -36,14 +42,14 @@ Supabase public variables blank, set `NODE_ENV=development` and
 `AI_ALLOW_DEMO_SCAN=true`, and use the browser-local demo through loopback.
 The demo header is accepted only from loopback in development. This bypass is
 off by default and ignored in production. A public demo must use renter login
-to spend the backend key. A real scan still calls OpenAI and may incur charges;
+to spend the backend key. A real scan still calls the configured provider and may incur charges;
 there is no production mock-response switch.
 
 ## Renter workflow
 
 1. Sign in as a renter → Moving services; a property can prefill the destination.
 2. Choose up to three JPEG, PNG, or WEBP photos (3 MiB each, 6 MiB combined).
-3. Confirm permission to send photos to OpenAI, then choose **Analyze photos**.
+3. Confirm permission to send photos to Cloudflare Workers AI (and optional OpenAI backup), then choose **Analyze photos**.
 4. Review the suggested categories, confidence, and quantities. Use 0 to remove
    mistakes. **Apply reviewed inventory** replaces the current list to avoid
    counting the example items twice. Add missing items with the manual controls.
@@ -94,7 +100,7 @@ the estimate is never a guaranteed moving price.
   decodes/re-encodes to bounded JPEGs and removes EXIF/location metadata.
 - The browser also checks limits and resizes previews. Selected photos stay in
   page memory; the app does not save inventory photos to disk, localStorage, or
-  Supabase. The backend sends the sanitized photos to OpenAI only after consent.
+  Supabase. The backend sends sanitized photos to Cloudflare only after consent; optional OpenAI backup requires explicit server configuration.
   Responses use `store:false`; this is not a promise that the provider has zero
   retention. Review the provider's current data policy before using real homes.
 - Strict response parsing accepts only catalog categories, integer counts, and
@@ -113,7 +119,7 @@ Run `npm test`, `npm run build`, `npm run test:browser:ai`, and
 `npm run test:browser:auth-ui`. Browser tests need Python dependencies in
 `tests/requirements.txt` plus Chromium; set
 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` if using a system installation.
-The AI browser test builds an isolated demo fixture and uses **mocked OpenAI**
+The AI browser test builds an isolated demo fixture and uses **mocked Cloudflare**
 responses, never a real key. It exercises the real upload route and local
 moving-request journey. The shared request payload is separately tested with
 a mocked RPC; this does not establish hosted persistence.

@@ -30,9 +30,9 @@ Dependencies are locked in `package-lock.json`. Run `npm test` and `npm run buil
 
 ## Render: one Web Service
 
-`render.yaml` prepares a single Node 24 service on `feat/production-release` (Singapore, Starter, one instance, automatic deploys off). Build: `npm ci --include=dev && npm run build`; start: `npm start`; health check: `/api/health`. Render supplies `PORT`; Express binds `0.0.0.0` and serves `dist` plus `/api` on that port. No static-site service or database migration is needed.
+`render.yaml` prepares a single Node 24 service on `feat/production-release` (Singapore, Free, one instance, automatic deploys off). Build: `npm ci --include=dev && npm run build`; start: `npm start`; health check: `/api/health`. Render supplies `PORT`; Express binds `0.0.0.0` and serves `dist` plus `/api` on that port. No static-site service or database migration is needed.
 
-Set `NODE_ENV=production`, `VITE_SUPABASE_URL` to the hosted project **API** origin, and `VITE_SUPABASE_PUBLISHABLE_KEY` to its public key **before building**. Rebuild after changing either public variable. The server reuses these public settings to verify renter tokens and protected roles. Production rejects missing/loopback configuration and mismatched backend project overrides. OpenAI uses only backend `OPENAI_API_KEY` (or `BASHASHIFT_OPENAI_API_KEY`); `OPENAI_MODEL` defaults to `gpt-4.1-mini`. An absent key disables scanning with a manual-entry fallback. Keep `AI_ALLOW_DEMO_SCAN=false`; production never permits the demo scan bypass.
+Set `NODE_ENV=production`, `VITE_SUPABASE_URL` to the hosted project **API** origin, and `VITE_SUPABASE_PUBLISHABLE_KEY` to its public key **before building**. Rebuild after changing either public variable. The server reuses these public settings to verify renter tokens and protected roles. Production rejects missing/loopback configuration and mismatched backend project overrides. Furniture recognition uses backend-only `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AI_TOKEN` for `@cf/meta/llama-3.2-11b-vision-instruct`. Optional OpenAI backup requires both `AI_ENABLE_OPENAI_FALLBACK=true` and backend `OPENAI_API_KEY` (or `BASHASHIFT_OPENAI_API_KEY`); a key alone is never used. `OPENAI_MODEL` defaults to `gpt-4.1-mini`. Missing providers leave manual entry available. Keep `AI_ALLOW_DEMO_SCAN=false`; production never permits the demo scan bypass.
 
 Before live Auth verification, set Supabase Auth's Site URL and allowed signup/recovery redirect URLs to the chosen HTTPS Render origin; the app uses the current page origin. This PR does not apply these settings, deploy, or change Supabase data. Browser fixtures build with `--mode test` to exercise isolated demo/local mocks; release builds use the default production mode. [Render settings reference](https://render.com/docs/blueprint-spec).
 
@@ -40,7 +40,7 @@ Before live Auth verification, set Supabase Auth's Site URL and allowed signup/r
 
 Renters can choose furniture photos, explicitly send them for analysis, review and correct suggested quantities, and apply the approved list before publishing a moving request. Manual entry remains available when AI fails or is unconfigured. The BDT estimate now shows furniture handling, vehicle base, distance, stairs, and rounding; it is an illustrative estimate, never a guaranteed moving price.
 
-Follow [`docs/AI_SETUP.md`](docs/AI_SETUP.md) for backend-only OpenAI configuration, authenticated access, upload limits, the pricing formula, and the demo workflow. No database migration is needed for Phase 3. `npm run test:browser:ai` verifies the upload-to-request journey with **mocked OpenAI**; real-photo accuracy and hosted shared persistence still require separate verification.
+Follow [`docs/AI_SETUP.md`](docs/AI_SETUP.md) for backend-only Cloudflare configuration and optional OpenAI backup, authenticated access, upload limits, the pricing formula, and the demo workflow. No database migration is needed for Phase 3. `npm run test:browser:ai` verifies the upload-to-request journey with **mocked Cloudflare**; real-photo accuracy and hosted shared persistence still require separate verification.
 
 ## Supabase accounts and shared rentals
 
@@ -52,7 +52,7 @@ This release uses Node 24. Never use a service-role or secret key in frontend co
 
 ```text
 src/                 React components, styles, demo data, and domain logic
-server/              Express API, photo validation, renter verification, OpenAI integration
+server/              Express API, photo validation, renter verification, Cloudflare/OpenAI integration
 tests/               Domain tests and optional browser smoke tests
 docs/                Requirements, architecture, handoff, QA, and screenshots
 .env.example         Public Supabase configuration + server-only environment template
@@ -106,12 +106,12 @@ Supabase behavior below is implemented in code; hosted Auth/Storage and the full
 - New listings and worker profiles in this prototype are **unverified**.
 - The demonstration stores phone numbers in local browser storage: use test numbers or controlled demo data until proper authentication and server-side access rules exist. Never publish someone else's phone number without consent.
 - A phone call must happen *before* a customer marks a job confirmed. Workers must not see customers' phone numbers merely by receiving a broadcast; a renter shares contact after selecting a worker.
-- A real AI scan requires `OPENAI_API_KEY` set server-side. Do **not** fake AI detections or upload private photos without clear consent.
+- A real AI scan requires Cloudflare Workers AI credentials set server-side (or an explicitly enabled OpenAI backup). Do **not** fake AI detections or upload private photos without clear consent.
 
 ## Technology stack
 
 - Frontend: React 19, Vite, CSS (no full UI library), Lucide icons.
-- API: Node.js + Express, server-side OpenAI Responses API for optional furniture identification.
+- API: Node.js + Express, server-side Cloudflare Workers AI REST API for optional furniture identification, with explicitly enabled OpenAI backup.
 - Shared mode: Supabase Auth, Postgres, private photo storage, and database-enforced access policies.
 - Demo mode: separate, clearly labeled `localStorage` data.
 - Phase 3 adds reviewed AI inventory and itemized estimates; payments remain outside scope.

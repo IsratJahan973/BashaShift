@@ -10,7 +10,7 @@ with sync_playwright() as p:
         page.on('pageerror',lambda e:errors.append(str(e)))
         page.route('**/api/scan',lambda route:route.fulfill(
             status=200,content_type='application/json',
-            body='{"source":"openai","items":[{"name":"Bed","qty":2,"confidence":"medium"}]}'))
+            body='{"source":"cloudflare","reviewRequired":true,"items":[{"name":"Bed","qty":2,"confidence":"medium"}]}'))
         page.goto('http://127.0.0.1:5192/tests/fixtures/guidance.html')
         results=page.get_by_label('Ranked apartments')
         expect(results.locator('article')).to_have_count(2)

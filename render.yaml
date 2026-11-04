@@ -18,8 +18,12 @@ services:
         sync: false
       - key: VITE_SUPABASE_PUBLISHABLE_KEY
         sync: false
-      - key: OPENAI_API_KEY
+      - key: CLOUDFLARE_ACCOUNT_ID
         sync: false
+      - key: CLOUDFLARE_AI_TOKEN
+        sync: false
+      - key: AI_ENABLE_OPENAI_FALLBACK
+        value: "false"
       - key: OPENAI_MODEL
         value: gpt-4.1-mini
       - key: AI_ALLOW_DEMO_SCAN
