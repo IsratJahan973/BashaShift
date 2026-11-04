@@ -14,6 +14,8 @@ const aiResponse=(list=items)=>({status:'completed',output:[{type:'message',cont
 const provider=async()=>Response.json(aiResponse());
 const png=await sharp({create:{width:8,height:8,channels:3,background:'#87aa99'}}).png().toBuffer();
 const photo='data:image/png;base64,'+png.toString('base64');
+const otherPng=await sharp({create:{width:8,height:8,channels:3,background:'#aa8799'}}).png().toBuffer();
+const otherPhoto='data:image/png;base64,'+otherPng.toString('base64');
 async function withServer(options,run){
   const app=createApp({env:{OPENAI_API_KEY:key},verifyRenter:async()=>actor,fetchImpl:provider,dist:null,...options});
   const server=app.listen(0,'127.0.0.1');await once(server,'listening');
@@ -25,7 +27,7 @@ async function withServer(options,run){
 test('valid multi-photo requests call Responses with backend credentials, canonical JPEGs, strict inventory and no storage',async()=>{
   let submitted;
   await withServer({fetchImpl:async(url,init)=>{submitted={url,...init};return Response.json(aiResponse());}},async(post,base)=>{
-    const response=await post({images:[photo,photo],consent:true,model:'client-model',apiKey:'ignored',prompt:'ignored'});
+    const response=await post({images:[photo,otherPhoto],consent:true,model:'client-model',apiKey:'ignored',prompt:'ignored'});
     assert.equal(response.status,200);assert.match(response.headers.get('cache-control'),/no-store/);
     const data=await response.json();assert.deepEqual(data.items,items);assert.equal(data.reviewRequired,true);
     const body=JSON.parse(submitted.body);
@@ -129,4 +131,11 @@ test('renter authorization uses verified Auth identity plus protected profile ro
   const verifier=createRenterVerifier(env,async url=>Response.json(String(url).includes('/auth/v1/user')?{id,email:'fixture@example.test',user_metadata:{role:'renter'}}:{id,role}));
   await assert.rejects(verifier('fixture-token'),error=>error instanceof ScanError&&error.status===403);
   role='renter';assert.equal((await verifier('fixture-token')).id,id);
+});
+
+
+test('identical normalized photos are sent once so duplicate uploads cannot inflate inventory',async()=>{
+  const images=await validatePhotos({images:[photo,photo,otherPhoto],consent:true});
+  assert.equal(images.length,2);
+  assert.notEqual(images[0],images[1]);
 });

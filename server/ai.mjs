@@ -42,7 +42,8 @@ export async function validatePhotos(body){
       safe.push('data:image/jpeg;base64,'+jpeg.toString('base64'));
     }catch{throw new ScanError(400,'invalid_image','Use a readable, non-animated JPEG, PNG, or WEBP photo (up to 20 megapixels).');}
   }
-  return safe;
+  // Identical normalized photographs add no evidence and can cause double-counting.
+  return [...new Set(safe)];
 }
 
 export function parseInventory(response){
