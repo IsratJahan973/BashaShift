@@ -13,15 +13,21 @@ and does not change RLS, contact permissions, offers, or booking transitions.
    values to verify the renter's session and protected profile role. Server-only
    `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY` are supported alternatives. No
    service-role key is required. Do not change a hosted database for Phase 3.
-3. Set server-only `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AI_TOKEN` for
-   `@cf/meta/llama-3.2-11b-vision-instruct`. The token needs Workers AI Read/Edit
-   permissions. The account owner must first accept the model's Meta license/AUP;
-   the app never accepts terms automatically. See the [official model schema](https://developers.cloudflare.com/workers-ai/models/llama-3.2-11b-vision-instruct/).
-   Express sends sanitized JPEG **raw base64, without `data:image/jpeg;base64,`**
-   as `image` alongside `prompt`, and reads the non-streaming REST envelope's
-   `result.response` string. A data URI is for the separate `image_url.url`
-   messages format, not top-level `image` ([REST schema](https://developers.cloudflare.com/api/resources/ai/methods/run/)). Multiple photos are
-   combined into one bounded contact sheet so views are considered together.
+3. Set server-only `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AI_TOKEN` (Workers AI
+   Read/Edit on that account), and
+   `CLOUDFLARE_VISION_MODEL=@cf/mistralai/mistral-small-3.1-24b-instruct`.
+   Mistral is also the default when the model variable is absent or blank.
+   Its [documented schema](https://github.com/cloudflare/cloudflare-docs/blob/production/src/content/workers-ai-models/mistral-small-3.1-24b-instruct.json)
+   uses a user `messages` entry with `text` and `image_url` content parts; the
+   latter contains a sanitized `data:image/jpeg;base64,...` URI. The non-streaming
+   REST envelope's `result.response` is a string. Multiple photos are combined
+   into one bounded contact sheet so views are considered together.
+   Eligible accounts may explicitly select
+   `CLOUDFLARE_VISION_MODEL=@cf/meta/llama-3.2-11b-vision-instruct`, which retains
+   `prompt` plus raw base64 `image` input. Llama requires an authorized owner's
+   Meta license/AUP agreement. The app never accepts terms or switches between
+   Cloudflare models automatically after a failure. Unknown model names disable
+   Cloudflare scanning instead of sending images to an untested endpoint.
 4. OpenAI is optional backup only: set `AI_ENABLE_OPENAI_FALLBACK=true` and
    backend `OPENAI_API_KEY` (or `BASHASHIFT_OPENAI_API_KEY`) to opt in. A key alone
    never triggers OpenAI. `OPENAI_MODEL` defaults to `gpt-4.1-mini`. Both providers
@@ -130,15 +136,19 @@ a mocked RPC; this does not establish hosted persistence.
 
 1. Manually deploy the reviewed fix on Render. Set server-only
    `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AI_TOKEN` with Workers AI Read/Edit on that
-   account, and `AI_ENABLE_OPENAI_FALLBACK=false` to isolate Cloudflare. Keep
+   account, `CLOUDFLARE_VISION_MODEL=@cf/mistralai/mistral-small-3.1-24b-instruct`,
+   and `AI_ENABLE_OPENAI_FALLBACK=false` to isolate Cloudflare. Existing Render
+   services may need the model variable set manually; this does not require a
+   Supabase change. Keep
    `AI_ALLOW_DEMO_SCAN=false` and the working Supabase public configuration.
-   Only the authorized account owner may review/accept Meta's terms; this app
-   never sends an agreement request or bypasses account eligibility.
+   No Meta agreement is requested for Mistral; account API access must still be
+   confirmed. Never accept terms or bypass eligibility to perform this check.
 2. Sign in with an existing renter account at `https://bashashift.onrender.com`.
    In Moving services, upload one permissioned JPEG/PNG of clearly visible
    furniture, give consent, and click **Analyze photos**. Watch `/api/scan` in
    the browser Network panel; do not copy/share its Authorization header or image.
-3. Require HTTP 200, `source:"cloudflare"`, the expected model,
+3. Require HTTP 200, `source:"cloudflare"`,
+   `model:"@cf/mistralai/mistral-small-3.1-24b-instruct"`,
    `reviewRequired:true`, and sensible quantities for the actual photo. Suggestions
    must await **Apply reviewed inventory**; discard them to leave data unchanged.
    Do not publish a moving request or select a quotation to perform this check.
@@ -151,8 +161,5 @@ a mocked RPC; this does not establish hosted persistence.
    response arrived. Check manual **Add** controls still work after failure.
 
 Health configuration flags, Playground results, and mocked tests do not prove
-authenticated inference. If Meta eligibility cannot be obtained, a candidate is
-[`@cf/mistralai/mistral-small-3.1-24b-instruct`](https://developers.cloudflare.com/workers-ai/models/mistral-small-3.1-24b-instruct/),
-with vision support and [Apache 2.0 licensing](https://mistral.ai/news/mistral-small-3-1/).
-Its real API access for this account is **unconfirmed**. No model switch is made;
-confirm authenticated image inference and applicable service terms before any switch.
+authenticated inference. Confirm Mistral image inference with the production
+account using the procedure above before claiming live AI success.
