@@ -14,7 +14,7 @@ The offline demo deliberately **does not** pretend to run AI. It is not a deploy
 
 ### Option B — React + API project for development in Codex
 
-Requires Node.js 22+ (24 recommended) and internet for dependencies.
+Requires Node.js 24 and internet for dependencies.
 
 ```bash
 npm ci
@@ -28,6 +28,14 @@ Open `http://localhost:5173`. The `npm run dev` script starts both Vite frontend
 
 Dependencies are locked in `package-lock.json`. Run `npm test` and `npm run build` after installation. See [`docs/PHASE3_QA.md`](docs/PHASE3_QA.md) for current validation results and [`docs/PHASE2_QA.md`](docs/PHASE2_QA.md) for the database foundation's verification scope.
 
+## Render: one Web Service
+
+`render.yaml` prepares a single Node 24 service on `feat/production-release` (Singapore, Starter, one instance, automatic deploys off). Build: `npm ci --include=dev && npm run build`; start: `npm start`; health check: `/api/health`. Render supplies `PORT`; Express binds `0.0.0.0` and serves `dist` plus `/api` on that port. No static-site service or database migration is needed.
+
+Set `NODE_ENV=production`, `VITE_SUPABASE_URL` to the hosted project **API** origin, and `VITE_SUPABASE_PUBLISHABLE_KEY` to its public key **before building**. Rebuild after changing either public variable. The server reuses these public settings to verify renter tokens and protected roles. Production rejects missing/loopback configuration and mismatched backend project overrides. OpenAI uses only backend `OPENAI_API_KEY` (or `BASHASHIFT_OPENAI_API_KEY`); `OPENAI_MODEL` defaults to `gpt-4.1-mini`. An absent key disables scanning with a manual-entry fallback. Keep `AI_ALLOW_DEMO_SCAN=false`; production never permits the demo scan bypass.
+
+Before live Auth verification, set Supabase Auth's Site URL and allowed signup/recovery redirect URLs to the chosen HTTPS Render origin; the app uses the current page origin. This PR does not apply these settings, deploy, or change Supabase data. Browser fixtures build with `--mode test` to exercise isolated demo/local mocks; release builds use the default production mode. [Render settings reference](https://render.com/docs/blueprint-spec).
+
 ## Phase 3: photo-assisted moving inventory
 
 Renters can choose furniture photos, explicitly send them for analysis, review and correct suggested quantities, and apply the approved list before publishing a moving request. Manual entry remains available when AI fails or is unconfigured. The BDT estimate now shows furniture handling, vehicle base, distance, stairs, and rounding; it is an illustrative estimate, never a guaranteed moving price.
@@ -38,7 +46,7 @@ Follow [`docs/AI_SETUP.md`](docs/AI_SETUP.md) for backend-only OpenAI configurat
 
 Follow [`docs/SUPABASE_SETUP.md`](docs/SUPABASE_SETUP.md) to create a project, apply the migration, configure email login and public environment variables, and run local integration tests. Owners, renters, and movers have separate account roles. Customer contacts stay private until an authorized selection with consent. Live mode never mixes fictional demo records into the shared database.
 
-The Supabase SDK requires Node 22+. Never use a service-role or secret key in frontend configuration. See [`docs/PHASE2_QA.md`](docs/PHASE2_QA.md) for implemented behavior and the distinction between local and hosted validation.
+This release uses Node 24. Never use a service-role or secret key in frontend configuration. See [`docs/PHASE2_QA.md`](docs/PHASE2_QA.md) for implemented behavior and the distinction between local and hosted validation.
 
 ## Project layout
 

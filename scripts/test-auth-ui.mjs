@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 
 const directory=mkdtempSync(join(tmpdir(),'bashashift-auth-ui-'));
 try {
-  const build=spawnSync(process.execPath,['node_modules/vite/bin/vite.js','build','--outDir',directory,'--emptyOutDir'],{
+  const build=spawnSync(process.execPath,['node_modules/vite/bin/vite.js','build','--mode','test','--outDir',directory,'--emptyOutDir'],{
     stdio:'inherit',env:{ ...process.env, VITE_SUPABASE_URL:'http://127.0.0.1:54329',
       VITE_SUPABASE_PUBLISHABLE_KEY:'sb_publishable_'+randomUUID(),VITE_SUPABASE_ANON_KEY:'' },
   });

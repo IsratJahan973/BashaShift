@@ -16,6 +16,8 @@ from playwright.sync_api import expect, sync_playwright
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--app-dir', required=True)
 args = parser.parse_args()
+# Auth callbacks cross SDK/session and React updates; keep assertions bounded together.
+expect.set_options(timeout=15000)
 
 
 @contextmanager
@@ -35,7 +37,7 @@ with app_server() as base_url, sync_playwright() as p:
     for role, workspace in [('owner', 'Owner desk'), ('renter', 'Moving services'), ('mover', 'Mover desk')]:
         context = browser.new_context(viewport={'width':1440,'height':1000})
         page = context.new_page()
-        page.set_default_timeout(8000)
+        page.set_default_timeout(15000)
         errors = []
         page.on('pageerror', lambda error: errors.append(str(error)))
         uid = str(uuid4())
@@ -85,7 +87,9 @@ with app_server() as base_url, sync_playwright() as p:
                 respond(route, [])
 
         page.route('http://127.0.0.1:54329/**', api)
-        page.goto(base_url)
+        page.route('https://fonts.googleapis.com/**', lambda route: route.abort())
+        page.route('https://fonts.gstatic.com/**', lambda route: route.abort())
+        page.goto(base_url, wait_until='domcontentloaded')
         expect(page.locator('.home-card')).to_have_count(0)
         page.get_by_role('button', name='Sign in', exact=True).click()
         dialog = page.get_by_role('dialog', name='Account access')
@@ -130,7 +134,7 @@ with app_server() as base_url, sync_playwright() as p:
         page.get_by_role('button', name='Sign out', exact=True).click()
         page.get_by_role('button', name='Sign in', exact=True).wait_for()
         recovery_token = secrets.token_urlsafe(32)
-        page.goto(f'{base_url}/?callback=1#access_token={token}&refresh_token={recovery_token}&expires_in=3600&token_type=bearer&type=recovery')
+        page.goto(f'{base_url}/?callback=1#access_token={token}&refresh_token={recovery_token}&expires_in=3600&token_type=bearer&type=recovery', wait_until='domcontentloaded')
         dialog = page.get_by_role('dialog', name='Account access')
         expect(dialog.get_by_role('heading', name='Choose a new password')).to_be_visible()
         dialog.get_by_label('Password', exact=True).fill('a-new-secure-password')

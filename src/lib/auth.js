@@ -11,8 +11,8 @@ function validatePublicKey(key) {
   if (claims.role !== 'anon') throw new Error('Only the public anon key is allowed in the frontend.');
 }
 
-export function readSupabaseConfig(env = {}) {
-  if (Object.entries(env).some(([name,value]) => value && /^VITE_.*(?:SERVICE_ROLE|SECRET|PASSWORD|PRIVATE_KEY|OPENAI_API_KEY)/i.test(name))) {
+export function readSupabaseConfig(env = {}, { requireHosted = false } = {}) {
+  if (Object.entries(env).some(([name,value]) => value && /^VITE_.*(?:SERVICE_ROLE|SECRET|PASSWORD|PRIVATE_KEY|OPENAI)/i.test(name))) {
     throw new Error('Server credentials must not use VITE_ variable names.');
   }
   const url = env.VITE_SUPABASE_URL?.trim() || '';
@@ -20,14 +20,27 @@ export function readSupabaseConfig(env = {}) {
   for (const name of ['VITE_SUPABASE_PUBLISHABLE_KEY','VITE_SUPABASE_ANON_KEY']) {
     if (env[name]?.trim()) validatePublicKey(env[name].trim());
   }
-  if (!url && !key) return { configured: false, url: '', key: '' };
+  if (!url && !key) {
+    if (requireHosted) throw new Error('Production requires VITE_SUPABASE_URL and a public Supabase key.');
+    return { configured: false, url: '', key: '' };
+  }
   if (!url || !key) throw new Error('Set both the Supabase URL and public publishable key.');
-  const endpoint = new URL(url);
+  let endpoint;
+  try { endpoint = new URL(url); }
+  catch { throw new Error('Use a valid Supabase project API URL.'); }
   if (endpoint.username || endpoint.password || endpoint.search || endpoint.hash || endpoint.pathname !== '/') {
     throw new Error('Use the base project URL without embedded credentials, query parameters, or paths.');
   }
   if (endpoint.protocol !== 'https:' && !(endpoint.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(endpoint.hostname))) {
     throw new Error('Use HTTPS for a hosted Supabase project.');
+  }
+  if (endpoint.hostname === 'supabase.com' || endpoint.hostname.endsWith('.supabase.com')) {
+    throw new Error('Use the project API URL, not the Supabase dashboard URL.');
+  }
+  if (requireHosted && (endpoint.protocol !== 'https:' || endpoint.hostname === 'localhost' ||
+    endpoint.hostname.endsWith('.localhost') || /^127\./.test(endpoint.hostname) ||
+    ['[::1]', '[::]', '0.0.0.0'].includes(endpoint.hostname))) {
+    throw new Error('Production requires a hosted HTTPS Supabase project API URL.');
   }
   return { configured: true, url: endpoint.href.replace(/\/$/, ''), key };
 }

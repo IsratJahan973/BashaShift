@@ -23,6 +23,9 @@ export function createApp({env=process.env,fetchImpl=outboundFetch,verifyRenter=
   timeoutMs=25000,scanLimit=5,concurrencyLimit=2,clock=Date.now,
   dist=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../dist')}={}){
   const app=express();app.disable('x-powered-by');
+  // Render terminates the public connection at one ingress proxy. Trust only that hop.
+  app.set('trust proxy',env.RENDER==='true'?1:false);
+  app.use((_req,res,next)=>{res.set('X-Content-Type-Options','nosniff');next();});
   app.use('/api',(_req,res,next)=>{res.set('Cache-Control','no-store');next();});
   const key=env.OPENAI_API_KEY||env.BASHASHIFT_OPENAI_API_KEY;
   const model=env.OPENAI_MODEL||'gpt-4.1-mini';
@@ -70,6 +73,19 @@ export function createApp({env=process.env,fetchImpl=outboundFetch,verifyRenter=
     if(!(failure instanceof ScanError))failure=new ScanError(500,'scan_unavailable','Photo analysis is unavailable. Enter items manually.');
     res.status(failure.status).json({error:failure.message,code:failure.code});
   });
-  if(dist&&fs.existsSync(path.join(dist,'index.html'))){app.use(express.static(dist));app.get('*',(_req,res)=>res.sendFile(path.join(dist,'index.html')));}
+  const index=dist&&path.join(dist,'index.html');
+  if(env.NODE_ENV==='production'&&dist&&!fs.existsSync(index)) {
+    throw new Error('Frontend build missing. Run npm run build before starting production.');
+  }
+  if(index&&fs.existsSync(index)){
+    app.use('/assets',express.static(path.join(dist,'assets'),{maxAge:'1y',immutable:true}));
+    app.use(express.static(dist,{index:false}));
+    app.get('*',(req,res)=>{
+      if(!req.accepts('html')||req.path.startsWith('/assets/')||path.extname(req.path)||req.path.split('/').some(part=>part.startsWith('.'))) {
+        return res.status(404).type('text').send('Not found');
+      }
+      res.set('Cache-Control','no-cache').sendFile(index);
+    });
+  }
   return app;
 }

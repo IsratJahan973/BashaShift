@@ -7,7 +7,7 @@ import { once } from 'node:events';
 const directory=mkdtempSync(join(tmpdir(),'bashashift-ai-demo-'));
 let server;
 try{
-  const build=spawnSync(process.execPath,['node_modules/vite/bin/vite.js','build','--outDir',directory,'--emptyOutDir'],{
+  const build=spawnSync(process.execPath,['node_modules/vite/bin/vite.js','build','--mode','test','--outDir',directory,'--emptyOutDir'],{
     stdio:'inherit',env:{...process.env,VITE_SUPABASE_URL:'',VITE_SUPABASE_PUBLISHABLE_KEY:'',VITE_SUPABASE_ANON_KEY:''},
   });
   if(build.status!==0)process.exitCode=build.status??1;

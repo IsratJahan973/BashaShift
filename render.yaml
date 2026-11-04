@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: bashashift
+    runtime: node
+    region: singapore
+    plan: starter
+    numInstances: 1
+    branch: feat/production-release
+    rootDir: .
+    autoDeployTrigger: "off"
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4.1-mini
+      - key: AI_ALLOW_DEMO_SCAN
+        value: "false"

@@ -139,3 +139,36 @@ test('identical normalized photos are sent once so duplicate uploads cannot infl
   assert.equal(images.length,2);
   assert.notEqual(images[0],images[1]);
 });
+
+test('production scan verifies Supabase Auth and protected role, rejects demo bypass and fails closed on account outages',async()=>{
+  const id=randomUUID();let role='renter',profileStatus=200,providerCalls=0,profileCalls=0;
+  const env={NODE_ENV:'production',OPENAI_API_KEY:key,AI_ALLOW_DEMO_SCAN:'true',VITE_SUPABASE_URL:'https://fixture.supabase.co',VITE_SUPABASE_PUBLISHABLE_KEY:'sb_publishable_fixture'};
+  const upstream=async(url)=>{
+    const path=new URL(url).pathname;
+    if(path==='/auth/v1/user')return Response.json({id,user_metadata:{role:'renter'}});
+    if(path==='/rest/v1/profiles'){profileCalls++;return Response.json(profileStatus===200?{id,role}:{message:'private account failure'},{status:profileStatus});}
+    assert.equal(String(url),'https://api.openai.com/v1/responses');providerCalls++;return Response.json(aiResponse());
+  };
+  await withServer({env,fetchImpl:upstream,verifyRenter:createRenterVerifier(env,upstream)},async post=>{
+    assert.equal((await post({images:[photo],consent:true},{Authorization:'','X-BashaShift-Demo':'1'})).status,401);
+    role='mover';assert.equal((await post({images:[photo],consent:true})).status,403);assert.equal(providerCalls,0);
+    role='renter';profileStatus=503;
+    const unavailable=await post({images:[photo],consent:true});assert.equal(unavailable.status,503);assert.doesNotMatch(await unavailable.text(),/private account failure/);assert.equal(providerCalls,0);assert.equal(profileCalls,2,'Authorization outages must not trigger unbounded SDK retries');
+    profileStatus=200;
+    assert.equal((await post({images:[photo],consent:false})).status,400);assert.equal(providerCalls,0);
+    const accepted=await post({images:[photo],consent:true});assert.equal(accepted.status,200);assert.equal((await accepted.json()).reviewRequired,true);assert.equal(providerCalls,1);
+  });
+});
+
+test('Render ingress uses the last forwarded hop for attempt limits; client-supplied earlier IPs cannot bypass them',async()=>{
+  const reject=async()=>{throw new ScanError(401,'sign_in_required','Sign in again.');};
+  await withServer({env:{NODE_ENV:'production',RENDER:'true',OPENAI_API_KEY:key},verifyRenter:reject},async post=>{
+    for(let i=0;i<40;i++)assert.equal((await post({}, {'X-Forwarded-For':`192.0.2.${i+1}, 198.51.100.10`})).status,401);
+    const limited=await post({}, {'X-Forwarded-For':'192.0.2.250, 198.51.100.10'});assert.equal(limited.status,429);assert.equal(limited.headers.get('retry-after'),'60');
+    assert.equal((await post({}, {'X-Forwarded-For':'198.51.100.20'})).status,401);
+  });
+  await withServer({verifyRenter:reject},async post=>{
+    for(let i=0;i<40;i++)assert.equal((await post({}, {'X-Forwarded-For':`192.0.2.${i+1}`})).status,401);
+    assert.equal((await post({}, {'X-Forwarded-For':'198.51.100.30'})).status,429);
+  });
+});
