@@ -6,7 +6,7 @@ import sharp from 'sharp';
 import {createApp} from '../server/app.mjs';
 import {createRenterVerifier} from '../server/scan-auth.mjs';
 import {validatePhotos} from '../server/ai.mjs';
-import {CLOUDFLARE_MODEL,parseCloudflareInventory,prepareCloudflareImage} from '../server/cloudflare-ai.mjs';
+import {CLOUDFLARE_MODEL,CLOUDFLARE_MISTRAL_MODEL,parseCloudflareInventory,prepareCloudflareImage} from '../server/cloudflare-ai.mjs';
 import {createFurnitureRecognizer} from '../server/scan-provider.mjs';
 
 // All credentials, photos and provider responses in this file are synthetic fixtures.
@@ -26,25 +26,87 @@ async function withServer(options,action){
   try{await action(post,url);}finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 }
 
-test('primary Cloudflare REST request uses a sanitized image, fixed model and backend token only',async()=>{
+test('default Mistral REST request uses multimodal messages, a sanitized JPEG data URI and backend token only',async()=>{
   let submitted;
   const normalized=[{name:' couch ',qty:2,confidence:'high'},{name:'MOVING_BOXES',qty:3,confidence:'medium'}];
   await withServer({env:{...env,OPENAI_API_KEY:openKey},fetchImpl:async(url,init)=>{submitted={url,...init};return Response.json(envelope(normalized));}},async(post,url)=>{
     const response=await post({images:[original],consent:true,accountId:'ignored',model:'ignored',prompt:'private customer notes',token:'ignored'});
     assert.equal(response.status,200);
-    const data=await response.json();assert.equal(data.source,'cloudflare');assert.equal(data.model,CLOUDFLARE_MODEL);assert.equal(data.reviewRequired,true);
+    const data=await response.json();assert.equal(data.source,'cloudflare');assert.equal(data.model,CLOUDFLARE_MISTRAL_MODEL);assert.equal(data.reviewRequired,true);
     assert.deepEqual(data.items,[{name:'Sofa',qty:2,confidence:'high'},items[1]]);
-    assert.equal(submitted.url,`https://api.cloudflare.com/client/v4/accounts/${account}/ai/run/${CLOUDFLARE_MODEL}`);
+    assert.equal(submitted.url,`https://api.cloudflare.com/client/v4/accounts/${account}/ai/run/${CLOUDFLARE_MISTRAL_MODEL}`);
     assert.equal(submitted.headers.Authorization,'Bearer '+cloudToken);
     const body=JSON.parse(submitted.body);
-    assert.deepEqual(Object.keys(body).sort(),['image','max_tokens','prompt','stream','temperature']);
+    assert.deepEqual(Object.keys(body).sort(),['max_tokens','messages','stream','temperature']);
     assert.equal(body.max_tokens,1200);assert.equal(body.temperature,0);assert.equal(body.stream,false);
-    assert.equal(body.image,sanitized[0].split(',')[1]);assert.match(body.prompt,/largest clearly visible count/);
-    assert.doesNotMatch(body.image,/^data:/);assert.notEqual(body.prompt,'agree');
+    assert.equal(body.messages.length,1);assert.equal(body.messages[0].role,'user');
+    const content=body.messages[0].content;assert.equal(content.length,2);
+    assert.deepEqual(content[1],{type:'image_url',image_url:{url:sanitized[0]}});
+    assert.equal(content[0].type,'text');assert.match(content[0].text,/largest clearly visible count/);
+    assert.notEqual(content[0].text,'agree');
     assert.doesNotMatch(submitted.body,/private customer notes|renter-session-fixture/);
     assert.equal(submitted.body.includes(openKey),false);
     for(const value of [cloudToken,account,openKey])assert.equal(JSON.stringify(data).includes(value),false);
     const health=await(await fetch(url+'/api/health')).json();assert.equal(health.aiConfigured,true);assert.equal(health.aiDemoEnabled,false);
+  });
+});
+
+test('an explicitly selected eligible Llama account retains raw-base64 prompt input; 5016 never triggers automatic agreement or model switching',async()=>{
+  let denied=false;const calls=[];
+  await withServer({env:{...env,CLOUDFLARE_VISION_MODEL:' '+CLOUDFLARE_MODEL+' '},fetchImpl:async(url,init)=>{
+    calls.push({url,body:JSON.parse(init.body)});
+    return denied?Response.json({success:false,errors:[{code:5016,message:'agreement required'}]},{status:403}):Response.json(envelope(items));
+  }},async post=>{
+    const response=await post();assert.equal(response.status,200);assert.equal((await response.json()).model,CLOUDFLARE_MODEL);
+    const body=calls[0].body;assert.deepEqual(Object.keys(body).sort(),['image','max_tokens','prompt','stream','temperature']);
+    assert.equal(body.image,sanitized[0].split(',')[1]);assert.doesNotMatch(body.image,/^data:/);
+    assert.match(body.prompt,/largest clearly visible count/);assert.notEqual(body.prompt,'agree');
+    denied=true;const failure=await post();assert.equal(failure.status,502);assert.equal((await failure.json()).code,'ai_provider_error');
+    assert.equal(calls.length,2);assert.ok(calls.every(call=>call.url.endsWith('/'+CLOUDFLARE_MODEL)&&call.body.prompt===body.prompt));
+  });
+});
+
+test('explicit Mistral configuration and blank defaults select Mistral independently of client-supplied model names',async()=>{
+  for(const model of [CLOUDFLARE_MISTRAL_MODEL,' '+CLOUDFLARE_MISTRAL_MODEL+' ','']){
+    await withServer({env:{...env,CLOUDFLARE_VISION_MODEL:model},fetchImpl:async(url,init)=>{
+      assert.ok(url.endsWith('/'+CLOUDFLARE_MISTRAL_MODEL));assert.ok(Array.isArray(JSON.parse(init.body).messages));
+      return Response.json(envelope(items));
+    }},async post=>{
+      const response=await post({images:[original],consent:true,model:CLOUDFLARE_MODEL});
+      assert.equal(response.status,200);assert.equal((await response.json()).model,CLOUDFLARE_MISTRAL_MODEL);
+    });
+  }
+});
+
+test('unknown Cloudflare model configuration fails closed without sending furniture images to an arbitrary model or URL',async()=>{
+  for(const model of ['@cf/unknown-model','../../other-account','https://private.invalid/model']){
+    await withServer({env:{...env,CLOUDFLARE_VISION_MODEL:model},fetchImpl:async()=>assert.fail('Unsupported model must not be contacted')},async(post,url)=>{
+      assert.equal((await(await fetch(url+'/api/health')).json()).aiConfigured,false);
+      const response=await post();assert.equal(response.status,503);const data=await response.json();
+      assert.equal(data.code,'ai_not_configured');assert.equal(Object.hasOwn(data,'items'),false);assert.match(data.error,/manually/);
+    });
+  }
+});
+
+test('Mistral REST responses preserve review and strict quantities, accept usage metadata, and reject malformed inventory without detections',async()=>{
+  const valid=envelope([{name:' couch ',qty:2,confidence:'medium'}]);
+  valid.result.response='```json\n'+valid.result.response+'\n```';
+  valid.result.usage={prompt_tokens:120,completion_tokens:30,total_tokens:150};valid.result.tool_calls=[];
+  const cases=[
+    [valid,200],[envelope([]),200],
+    [{success:true,result:{response:{items}}},502],
+    [{success:true,result:{response:'{"items":['}},502],
+    [envelope([{name:'Sofa',qty:'2',confidence:'high'}]),502],
+    [envelope([{name:'Car',qty:1,confidence:'high'}]),502],
+  ];
+  let current;
+  await withServer({scanLimit:10,fetchImpl:async url=>{assert.ok(url.endsWith('/'+CLOUDFLARE_MISTRAL_MODEL));return Response.json(current);}},async post=>{
+    for(const [data,status] of cases){
+      current=data;const response=await post();assert.equal(response.status,status);const result=await response.json();
+      if(status===200){assert.equal(result.reviewRequired,true);assert.equal(result.model,CLOUDFLARE_MISTRAL_MODEL);
+        assert.deepEqual(result.items,data===valid?[{name:'Sofa',qty:2,confidence:'medium'}]:[]);
+      }else{assert.equal(result.code,'invalid_ai_response');assert.equal(Object.hasOwn(result,'items'),false);assert.match(result.error,/manually/);}
+    }
   });
 });
 
@@ -63,7 +125,7 @@ test('multiple sanitized views form one bounded, metadata-free contact sheet; du
   });
 });
 
-test('camera-sized JPEG/PNG fixtures reach REST as canonical base64 JPEG bytes after rotation, resizing and metadata removal',async()=>{
+test('camera-sized JPEG/PNG fixtures use the correct Mistral and Llama image contracts after rotation, resizing and metadata removal',async()=>{
   // Synthetic room with phone-photo dimensions/EXIF; this tests transport, not live recognition accuracy.
   const room=Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1000"><rect width="1400" height="1000" fill="#ddd3c1"/><path d="M0 700H1400V1000H0Z" fill="#967450"/><path d="M0 0L180 120V700L0 1000M1400 0L1220 120V700L1400 1000" fill="#c9bca3"/><rect x="700" y="180" width="300" height="250" fill="#accbd7"/><rect x="200" y="570" width="500" height="200" rx="30" fill="#43766d"/><rect x="180" y="650" width="540" height="160" rx="20" fill="#365e57"/><rect x="850" y="680" width="200" height="70" fill="#573c2a"/><path d="M870 750V880M1030 750V880" stroke="#573c2a" stroke-width="20"/></svg>');
   const jpeg=await sharp(room).resize(4032,3024,{fit:'fill'}).jpeg({quality:90})
@@ -71,20 +133,22 @@ test('camera-sized JPEG/PNG fixtures reach REST as canonical base64 JPEG bytes a
   const png=await sharp(room).resize(1800,1200,{fit:'fill'}).png().toBuffer();
   const photos=['data:image/jpeg;base64,'+jpeg.toString('base64'),'data:image/png;base64,'+png.toString('base64')];
   let submitted;
-  await withServer({fetchImpl:async(_url,init)=>{submitted=JSON.parse(init.body);return Response.json(envelope(items));}},async post=>{
-    for(const images of [[photos[0]],[photos[1]],photos]){
-      const response=await post({images,consent:true});assert.equal(response.status,200);
-      const clean=await validatePhotos({images,consent:true});
-      const expected=await prepareCloudflareImage(clean);
-      assert.equal(submitted.image,expected);
-      assert.match(submitted.image,/^[A-Za-z0-9+/]+={0,2}$/);
-      const bytes=Buffer.from(submitted.image,'base64'),metadata=await sharp(bytes).metadata();
-      assert.equal(bytes.toString('base64'),submitted.image);assert.equal(metadata.format,'jpeg');
-      assert.ok(metadata.width<=1280&&metadata.height<=1280);assert.equal(metadata.exif,undefined);
-      assert.equal(bytes.includes(Buffer.from('private camera fixture')),false);
-      if(images.length===1)assert.equal(submitted.image,clean[0].split(',')[1]);
-    }
-  });
+  for(const model of [CLOUDFLARE_MISTRAL_MODEL,CLOUDFLARE_MODEL]){
+    await withServer({env:{...env,CLOUDFLARE_VISION_MODEL:model},fetchImpl:async(_url,init)=>{submitted=JSON.parse(init.body);return Response.json(envelope(items));}},async post=>{
+      for(const images of [[photos[0]],[photos[1]],photos]){
+        const response=await post({images,consent:true});assert.equal(response.status,200);
+        const clean=await validatePhotos({images,consent:true});
+        const expected=await prepareCloudflareImage(clean);
+        const image=model===CLOUDFLARE_MISTRAL_MODEL?submitted.messages[0].content[1].image_url.url.split(',')[1]:submitted.image;
+        assert.equal(image,expected);assert.match(image,/^[A-Za-z0-9+/]+={0,2}$/);
+        const bytes=Buffer.from(image,'base64'),metadata=await sharp(bytes).metadata();
+        assert.equal(bytes.toString('base64'),image);assert.equal(metadata.format,'jpeg');
+        assert.ok(metadata.width<=1280&&metadata.height<=1280);assert.equal(metadata.exif,undefined);
+        assert.equal(bytes.includes(Buffer.from('private camera fixture')),false);
+        if(images.length===1)assert.equal(image,clean[0].split(',')[1]);
+      }
+    });
+  }
 });
 
 test('documented REST JSON with usage/messages and a complete JSON fence remains valid without relaxing inventory validation',()=>{
@@ -132,7 +196,7 @@ test('provider agreement, input, authorization, quota and timeout failures log o
   for(const [status,code,expected] of [[403,5016,502],[400,5004,502],[401,10000,502],[403,10000,502],[429,3036,503],[408,3007,504],[200,5016,502]]){
     const logs=[];let calls=0;
     await withServer({logScanFailure:record=>logs.push(record),fetchImpl:async(_url,init)=>{
-      calls++;assert.notEqual(JSON.parse(init.body).prompt,'agree');
+      calls++;const body=JSON.parse(init.body);assert.equal(body.messages[0].content[0].type,'text');assert.notEqual(body.messages[0].content[0].text,'agree');
       return Response.json({success:false,errors:[{code,message:`private ${cloudToken} ${account} ${original}`}],result:null},{status});
     }},async post=>{
       const response=await post(undefined,{'X-Request-ID':'private-client-correlation'});

@@ -22,6 +22,8 @@ services:
         sync: false
       - key: CLOUDFLARE_AI_TOKEN
         sync: false
+      - key: CLOUDFLARE_VISION_MODEL
+        value: "@cf/mistralai/mistral-small-3.1-24b-instruct"
       - key: AI_ENABLE_OPENAI_FALLBACK
         value: "false"
       - key: OPENAI_MODEL
