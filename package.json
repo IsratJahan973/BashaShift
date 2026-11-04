@@ -14,7 +14,8 @@
     "db:env": "node scripts/local-supabase.mjs env",
     "test:integration": "node scripts/local-supabase.mjs test",
     "test:browser:live": "node scripts/local-supabase.mjs browser",
-    "test:browser:auth-ui": "node scripts/test-auth-ui.mjs"
+    "test:browser:auth-ui": "node scripts/test-auth-ui.mjs",
+    "test:browser:ai": "node scripts/test-ai-browser.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.118.0",
@@ -22,7 +23,9 @@
     "express": "^4.21.2",
     "lucide-react": "^0.468.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "sharp": "0.35.5",
+    "undici": "7.30.1"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.15",

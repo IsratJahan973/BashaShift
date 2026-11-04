@@ -4,14 +4,21 @@ export const money = n => '৳' + Math.round(Number(n) || 0).toLocaleString('en-
 export const uid = (prefix='id') => `${prefix}-${globalThis.crypto?.randomUUID?.() || Date.now().toString(36) + Math.random().toString(36).slice(2)}`;
 export const safePhone = p => /^01[3-9]\d{8}$/.test(String(p || '').replace(/\D/g, ''));
 export const phoneLink = p => safePhone(p) ? 'tel:' + String(p).replace(/\D/g,'') : null;
-export function calculateEstimate({ items = [], km = 5, fromFloor = 0, toFloor = 0, hasLift = true }) {
-  const quantity = items.reduce((s, x) => s + Math.max(0, Number(x.qty) || 0), 0);
-  if (!quantity) return 0;
-  const handling = items.reduce((sum, x) => sum + (furniture.find(f => f.key === x.name)?.price || 180) * Math.max(0, Number(x.qty) || 0), 0);
-  const transport = 850 + 45 * Math.max(0, Number(km) || 0);
-  const floorCharge = hasLift ? 0 : 100 * (Math.max(0, Number(fromFloor) || 0) + Math.max(0, Number(toFloor) || 0));
-  return Math.ceil((handling + transport + floorCharge) / 50) * 50;
+export const pricing = Object.freeze({ vehicleBase:850,perKm:45,perFloor:100,roundTo:50 });
+const nonnegative = value => Number.isFinite(Number(value)) ? Math.max(0,Number(value)) : 0;
+export function estimateBreakdown({ items=[],km=5,fromFloor=0,toFloor=0,hasLift=true }={}) {
+  const lines=items.map(item=>({ name:item.name,qty:nonnegative(item.qty),unitPrice:furniture.find(f=>f.key===item.name)?.price || 180 }))
+    .filter(item=>item.qty>0).map(item=>({ ...item,amount:item.qty*item.unitPrice }));
+  if(!lines.length)return { lines:[],handling:0,vehicleBase:0,distance:0,stairs:0,rounding:0,total:0 };
+  const handling=lines.reduce((sum,item)=>sum+item.amount,0);
+  const vehicleBase=pricing.vehicleBase;
+  const distance=pricing.perKm*nonnegative(km);
+  const stairs=hasLift?0:pricing.perFloor*(nonnegative(fromFloor)+nonnegative(toFloor));
+  const subtotal=handling+vehicleBase+distance+stairs;
+  const total=Math.ceil(subtotal/pricing.roundTo)*pricing.roundTo;
+  return { lines,handling,vehicleBase,distance,stairs,rounding:total-subtotal,total };
 }
+export const calculateEstimate = move => estimateBreakdown(move).total;
 export function matchesArea(worker, request) {
   if (!worker || !request || !worker.available) return false;
   if (!worker.skills?.includes('Moving')) return false;
