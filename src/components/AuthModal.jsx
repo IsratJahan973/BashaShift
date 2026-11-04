@@ -1,9 +1,20 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { areas } from '../data.js';
-import { loginAccount, registerAccount, requestPasswordReset, roles, updateAccountPassword } from '../lib/auth.js';
+import { loginAccount, registerAccount, requestPasswordReset, roles, updateAccountPassword, verifyAccountRole } from '../lib/auth.js';
 
-export default function AuthModal({ client, onClose, initialRole = 'renter', initialMode = 'login' }) {
+const roleLabels = {
+  owner: { english: 'Property Owner', bangla: 'বাড়ির মালিক' },
+  renter: { english: 'Renter', bangla: 'ভাড়াটিয়া' },
+  mover: { english: 'Moving Service Provider', bangla: 'সেবাদানকারী' },
+};
+const registrationFields = {
+  'Full name':'পূর্ণ নাম', 'Bangladesh phone number':'বাংলাদেশি ফোন নম্বর',
+  'Service area':'কাজের এলাকা', 'Email address':'ইমেইল ঠিকানা',
+  'Password':'পাসওয়ার্ড', 'Confirm new password':'নতুন পাসওয়ার্ড নিশ্চিত করুন',
+};
+
+export default function AuthModal({ client, onClose, onAuthenticated, initialRole = 'renter', initialMode = 'login' }) {
   const [mode, setMode] = useState(initialMode);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -25,8 +36,17 @@ export default function AuthModal({ client, onClose, initialRole = 'renter', ini
       } else if (register) {
         const data = await registerAccount(client, form, window.location.origin);
         if (data.needsEmailConfirmation) { setMessage('Check your email to confirm your account, then sign in.'); setForm(old => ({ ...old, password: '' })); }
-        else onClose();
-      } else { await loginAccount(client, form.email, form.password); onClose(); }
+        else {
+          try { await verifyAccountRole(client, data.user.id, form.role); }
+          catch (failure) { await client.auth.signOut(); throw failure; }
+          onAuthenticated(form.role);
+        }
+      } else {
+        const data = await loginAccount(client, form.email, form.password);
+        try { await verifyAccountRole(client, data.user.id, form.role); }
+        catch (failure) { await client.auth.signOut(); throw failure; }
+        onAuthenticated(form.role);
+      }
     } catch (failure) { setError(failure.message); }
     finally { setBusy(false); }
   }
@@ -43,25 +63,29 @@ export default function AuthModal({ client, onClose, initialRole = 'renter', ini
         <div role="status" className="inline-alert positive">{message}</div>
         <button className="btn btn-primary btn-block" onClick={onClose}>Continue to BashaShift</button>
       </div> : <form onSubmit={submit} className="auth-form">
+        {mode === 'login' && <fieldset className="role-picker">
+          <legend>Choose your role / আপনার পরিচয় বাছুন</legend>
+          <div className="role-options">{Object.entries(roleLabels).map(([value,label]) => <button key={value} type="button" className={form.role === value ? 'selected' : ''} aria-pressed={form.role === value} onClick={() => setForm(old => ({ ...old, role:value }))}><strong>{label.english}</strong><span lang="bn">{label.bangla}</span></button>)}</div>
+        </fieldset>}
         {register && <>
-          <label className="field"><span>Account role</span><select className="form-control" {...field('role')}>{Object.entries(roles).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-          <label className="field"><span>Full name</span><input className="form-control" required maxLength={100} autoComplete="name" {...field('display_name')}/></label>
-          <label className="field"><span>Bangladesh phone number</span><input className="form-control" required type="tel" autoComplete="tel" placeholder="01XXXXXXXXX" {...field('phone')}/></label>
-          {form.role === 'mover' && <label className="field"><span>Service area</span><select className="form-control" {...field('service_area')}>{areas.map(area => <option key={area}>{area}</option>)}</select></label>}
+          <label className="field"><span>Account role / অ্যাকাউন্টের ধরন</span><select aria-label="Account role" className="form-control" {...field('role')}>{Object.entries(roleLabels).map(([value,label]) => <option key={value} value={value}>{label.english} ({label.bangla})</option>)}</select></label>
+          <label className="field"><span>Full name</span><small lang="bn">{registrationFields['Full name']}</small><input aria-label="Full name" className="form-control" required maxLength={100} autoComplete="name" {...field('display_name')}/></label>
+          <label className="field"><span>Bangladesh phone number</span><small lang="bn">{registrationFields['Bangladesh phone number']}</small><input aria-label="Bangladesh phone number" className="form-control" required type="tel" autoComplete="tel" placeholder="01XXXXXXXXX" {...field('phone')}/></label>
+          {form.role === 'mover' && <label className="field"><span>Service area</span><small lang="bn">{registrationFields['Service area']}</small><select aria-label="Service area" className="form-control" {...field('service_area')}>{areas.map(area => <option key={area}>{area}</option>)}</select></label>}
         </>}
-        {mode !== 'reset' && <label className="field"><span>Email address</span><input className="form-control" type="email" required autoComplete="email" {...field('email')}/></label>}
-        {mode !== 'forgot' && <label className="field"><span>Password</span><input className="form-control" type="password" required minLength={8} autoComplete={register || mode === 'reset' ? 'new-password' : 'current-password'} {...field('password')}/></label>}
-        {mode === 'reset' && <label className="field"><span>Confirm new password</span><input className="form-control" type="password" required minLength={8} autoComplete="new-password" {...field('confirmPassword')}/></label>}
+        {mode !== 'reset' && <label className="field"><span>Email address</span><small lang="bn">{registrationFields['Email address']}</small><input aria-label="Email address" className="form-control" type="email" required autoComplete="email" {...field('email')}/></label>}
+        {mode !== 'forgot' && <label className="field"><span>Password</span><small lang="bn">{registrationFields.Password}</small><input aria-label="Password" className="form-control" type="password" required minLength={8} autoComplete={register || mode === 'reset' ? 'new-password' : 'current-password'} {...field('password')}/></label>}
+        {mode === 'reset' && <label className="field"><span>Confirm new password</span><small lang="bn">{registrationFields['Confirm new password']}</small><input aria-label="Confirm new password" className="form-control" type="password" required minLength={8} autoComplete="new-password" {...field('confirmPassword')}/></label>}
         {error && <div role="alert" className="inline-alert">{error}</div>}
         {message && <div role="status" className="inline-alert positive">{message}</div>}
-        <button className="btn btn-primary btn-block" disabled={busy} type="submit">{busy ? 'Please wait…' : register ? 'Create account' : mode === 'forgot' ? 'Send reset link' : mode === 'reset' ? 'Update password' : 'Sign in'}</button>
+        <button aria-label={busy?'Please wait':register?'Create account':mode==='forgot'?'Send reset link':mode==='reset'?'Update password':'Sign in'} className="btn btn-primary btn-block" disabled={busy} type="submit">{busy ? 'Please wait…' : register ? 'Create account / অ্যাকাউন্ট খুলুন' : mode === 'forgot' ? 'Send reset link / রিসেট লিংক পাঠান' : mode === 'reset' ? 'Update password / পাসওয়ার্ড বদলান' : 'Sign in / লগ ইন'}</button>
       </form>}
-      {mode === 'forgot' && <button className="auth-text-button" disabled={busy} onClick={() => changeMode('login')}>Back to sign in</button>}
+      {mode === 'forgot' && <button aria-label="Back to sign in" className="auth-text-button" disabled={busy} onClick={() => changeMode('login')}>Back to sign in / লগ ইনে ফিরুন</button>}
       {mode === 'login' && <>
-        <button className="auth-text-button" disabled={busy} onClick={() => changeMode('forgot')}>Forgot password?</button>
-        <button className="btn btn-soft btn-block" disabled={busy} onClick={() => changeMode('register')}>New here? Create an account</button>
+        <button aria-label="Forgot password?" className="auth-text-button" disabled={busy} onClick={() => changeMode('forgot')}>Forgot password? / পাসওয়ার্ড ভুলে গেছেন?</button>
+        <button aria-label="New here? Create an account" className="btn btn-soft btn-block" disabled={busy} onClick={() => changeMode('register')}>New here? Create an account / নতুন? অ্যাকাউন্ট খুলুন</button>
       </>}
-      {register && <button className="btn btn-soft btn-block" disabled={busy} onClick={() => changeMode('login')}>Already registered? Sign in</button>}
+      {register && <button aria-label="Already registered? Sign in" className="btn btn-soft btn-block" disabled={busy} onClick={() => changeMode('login')}>Already registered? Sign in / আগে থেকেই অ্যাকাউন্ট আছে? লগ ইন</button>}
     </div>
   </div>;
 }
