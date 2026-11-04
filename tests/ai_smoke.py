@@ -1,5 +1,6 @@
 """Real photo-upload route with mocked Cloudflare, and a browser-local moving request."""
 import argparse
+import json
 import os
 from pathlib import Path
 from playwright.sync_api import expect, sync_playwright
@@ -18,6 +19,8 @@ with sync_playwright() as p:
 
     def moving(page):
         page.goto(args.base_url+'?demo=1')
+        menu=page.get_by_role('button',name='Toggle navigation / মেনু',exact=True)
+        if menu.is_visible(): menu.click()
         page.get_by_role('navigation',name='Main navigation').get_by_role('button',name='Moving services',exact=True).click()
 
     def contact(page):
@@ -72,21 +75,38 @@ with sync_playwright() as p:
     context.close()
     print('PASS photo -> validated inventory -> manual addition -> price-free moving request -> independent mover quotation -> renter comparison and selection; 360/390px responsive.')
 
-    context=browser.new_context(viewport={'width':1440,'height':1000})
-    page=context.new_page();page.set_default_timeout(7000)
-    page.route('**/api/scan',lambda route:route.fulfill(status=503,content_type='application/json',body='{"error":"AI photo analysis is not configured in this test.","code":"ai_not_configured"}'))
-    moving(page)
-    initial=page.locator('.inventory-list').inner_text()
-    page.get_by_label('Furniture photos',exact=True).set_input_files(str(photo))
-    page.get_by_label('I have permission to send these photos').check()
-    page.get_by_role('button',name='Analyze photos',exact=True).click()
-    expect(page.get_by_role('alert')).to_contain_text('not configured')
-    assert page.locator('.inventory-list').inner_text()==initial
-    expect(page.locator('.scan-review')).to_have_count(0)
-    page.get_by_role('button',name='Add Refrigerator',exact=True).click()
-    contact(page)
-    page.get_by_role('button',name='Publish moving request',exact=True).click()
-    expect(page.get_by_role('heading',name='My requests',exact=True)).to_be_visible()
-    assert page.evaluate('(key)=>JSON.parse(localStorage.getItem(key)).requests[0].status',storage)=='open'
-    context.close();browser.close()
-    print('PASS unconfigured-AI UI fallback: manual inventory unchanged, editable, and publishable; no fabricated detections or bookings.')
+    # All failures are mocked locally; these checks never touch production records.
+    failures=[
+        ('unconfigured',503,'AI photo analysis is not configured in this test.','not configured'),
+        ('cloudflare',502,'Photo analysis is unavailable. Enter items manually or try again later.','unavailable'),
+        ('timeout',504,'Photo analysis took too long. Retry or enter items manually.','took too long'),
+        ('network',None,'','Manual entry remains available'),
+    ]
+    for name,status,message,expected in failures:
+        context=browser.new_context(viewport={'width':390,'height':844})
+        page=context.new_page();page.set_default_timeout(7000)
+        errors=[];page.on('pageerror',lambda error:errors.append(str(error)))
+        if status is None:
+            page.route('**/api/scan',lambda route:route.abort('failed'))
+        else:
+            page.route('**/api/scan',lambda route:route.fulfill(status=status,content_type='application/json',body=json.dumps({'error':message})))
+        moving(page)
+        initial=page.locator('.inventory-list').inner_text()
+        page.get_by_label('Furniture photos',exact=True).set_input_files(str(photo))
+        page.get_by_label('I have permission to send these photos').check()
+        page.get_by_role('button',name='Analyze photos',exact=True).click()
+        expect(page.get_by_role('alert')).to_contain_text(expected)
+        assert page.locator('.inventory-list').inner_text()==initial,'Failed AI must preserve manual inventory'
+        expect(page.locator('.scan-review')).to_have_count(0)
+        page.get_by_role('button',name='Add Refrigerator',exact=True).click()
+        contact(page)
+        expect(page.get_by_role('button',name='Publish moving request',exact=True)).to_be_enabled()
+        page.get_by_role('button',name='Publish moving request',exact=True).click()
+        expect(page.get_by_role('heading',name='My requests',exact=True)).to_be_visible()
+        request=page.evaluate('(key)=>JSON.parse(localStorage.getItem(key)).requests[0]',storage)
+        assert request['status']=='open' and request['offers']==[] and request['selectedOfferId'] is None
+        assert {item['name']:item['qty'] for item in request['items']}=={'Bed':1,'Sofa':1,'Boxes':3,'Refrigerator':1}
+        assert not errors,errors
+        context.close()
+        print(f'PASS {name} AI failure: inventory retained, manual editing and publication available; no fabricated detections or bookings.')
+    browser.close()
