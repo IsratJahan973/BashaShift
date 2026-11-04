@@ -113,21 +113,21 @@ test('Mistral REST responses preserve review and strict quantities, accept usage
 test('Mistral explanatory wrappers preserve strict inventory validation',async()=>{
   const textInventory='{"items":[{"name":"Sofa","qty":1,"confidence":"medium"}]}';
   const responses=[
-    'Here is the moving inventory:\\n'+textInventory,
-    '```json\\n'+textInventory+'\\n```',
-    'Detected furniture:\\n```json\\n'+textInventory+'\\n```\\nPlease review.',
+    'Here is the moving inventory:\n'+textInventory,
+    '```json\n'+textInventory+'\n```',
+    'Detected furniture:\n```json\n'+textInventory+'\n```\nPlease review.',
   ];
-  for(const raw of responses){
-    const response=parseCloudflareInventory({success:true,errors:[],result:{response:raw.replaceAll('\\n','\n')}});
+  for(const responseText of responses){
+    const response=parseCloudflareInventory({success:true,errors:[],result:{response:responseText}});
     assert.deepEqual(response,[{name:'Sofa',qty:1,confidence:'medium'}]);
   }
-  for(const raw of [
+  for(const responseText of [
     'No furniture found.',
     '{"items":[{"name":"Car","qty":1,"confidence":"high"}]}',
-    'First ```json\\n'+textInventory+'\\n``` second ```json\\n'+textInventory+'\\n```',
+    'First ```json\n'+textInventory+'\n``` second ```json\n'+textInventory+'\n```',
     '{"items":[{"name":"Bed","qty":"1","confidence":"high"}]}',
   ]){
-    assert.throws(()=>parseCloudflareInventory({success:true,errors:[],result:{response:raw.replaceAll('\\n','\n')}}),e=>e.code==='invalid_ai_response');
+    assert.throws(()=>parseCloudflareInventory({success:true,errors:[],result:{response:responseText}}),e=>e.code==='invalid_ai_response');
   }
 });
 
