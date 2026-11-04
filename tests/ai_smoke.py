@@ -88,5 +88,40 @@ with sync_playwright() as p:
     page.get_by_role('button',name='Publish moving request',exact=True).click()
     expect(page.get_by_role('heading',name='My requests',exact=True)).to_be_visible()
     assert page.evaluate('(key)=>JSON.parse(localStorage.getItem(key)).requests[0].status',storage)=='open'
-    context.close();browser.close()
+    context.close()
     print('PASS unconfigured-AI UI fallback: manual inventory unchanged, editable, and publishable; no fabricated detections or bookings.')
+
+    # These use the real local /api/scan parser with provider responses mocked by the fixture.
+    for scenario in ['wrapped', 'malformed', 'empty']:
+        context=browser.new_context(viewport={'width':1440,'height':1000})
+        page=context.new_page();page.set_default_timeout(7000)
+        moving(page)
+        initial=page.locator('.inventory-list').inner_text()
+        page.get_by_label('Furniture photos',exact=True).set_input_files(str(photo))
+        page.get_by_label('I have permission to send these photos').check()
+        with page.expect_response(lambda response:response.url.endswith('/api/scan') and response.request.method=='POST') as pending:
+            page.get_by_role('button',name='Analyze photos',exact=True).click()
+        response=pending.value
+        assert response.status==(502 if scenario=='malformed' else 200)
+        if scenario=='wrapped':
+            expect(page.locator('.scan-review-row')).to_have_count(3)
+            expect(page.get_by_role('button',name='Publish moving request',exact=True)).to_be_disabled()
+            page.get_by_role('button',name='Keep manual inventory',exact=True).click()
+        elif scenario=='malformed':
+            assert response.json()['code']=='invalid_ai_response'
+            assert response.headers.get('x-request-id')
+            expect(page.get_by_role('alert')).to_contain_text('could not be read')
+        else:
+            expect(page.get_by_text('No furniture was identified.',exact=False)).to_be_visible()
+        expect(page.locator('.scan-review')).to_have_count(0)
+        assert page.locator('.inventory-list').inner_text()==initial
+        page.get_by_role('button',name='Add Sofa',exact=True).click()
+        assert page.locator('.inventory-list').inner_text()!=initial
+        expect(page.get_by_role('button',name='Publish moving request',exact=True)).to_be_enabled()
+        assert page.evaluate('(key)=>JSON.parse(localStorage.getItem(key)).requests.length',storage)==0
+        for width in [360,390]:
+            page.set_viewport_size({'width':width,'height':844})
+            assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
+        context.close()
+        print('PASS '+scenario+' provider response: real parser, mandatory review/manual fallback, no request auto-published, 360/390px.')
+    browser.close()
