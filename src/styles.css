@@ -38,6 +38,9 @@
 .recommended-home .home-card { flex:1; }
 .recommendation-explanation { border:1px solid var(--line, #d9e4dd); border-top:0; border-radius:0 0 12px 12px; padding:12px; font-size:.8rem; overflow-wrap:anywhere; }
 .recommendation-explanation ul { margin:8px 0; padding-left:18px; }
+.recommendation-explanation .required-criteria-status { display:block; color:#246b4d; }
+.recommendation-explanation .preference-score { margin:8px 0 4px; font-weight:600; }
+.recommendation-explanation .budget-headroom { margin:4px 0; color:#52695d; }
 .quotation-guidance { min-width:0; }
 .quotation-guidance .offer > div { min-width:0; overflow-wrap:anywhere; }
 @media (max-width:480px) {

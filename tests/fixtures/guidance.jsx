@@ -7,7 +7,7 @@ import FurnitureRecognition from '../../src/components/FurnitureRecognition.jsx'
 import { rankApartments } from '../../src/lib/recommendations.js';
 import { chooseOffer } from '../../src/domain.js';
 import '../../src/styles.css';
-const properties=[{id:'a',title:'Test apartment A',status:'published',rent:18000,beds:2,area:'Banasree',lift:true,parking:false,balcony:true},{id:'b',title:'Test apartment B',status:'published',rent:15000,beds:2,area:'Mirpur',lift:false,parking:true,balcony:false}];
+const properties=[{id:'a',title:'Test apartment A',status:'published',rent:20000,beds:2,area:'Banasree',lift:true,parking:false,balcony:true},{id:'b',title:'Test apartment B',status:'published',rent:15000,beds:2,area:'Mirpur',lift:false,parking:true,balcony:false}];
 const move={items:[{name:'Bed',qty:2},{name:'Boxes',qty:4}],km:10,fromFloor:2,toFloor:3,hasLift:false};
 const workers=[{id:'a',name:'Test mover A',area:'Banasree'},{id:'b',name:'Test mover B',area:'Banasree'}];
 const offers=[{id:'a',workerId:'a',status:'pending',amount:2000},{id:'b',workerId:'b',status:'pending',amount:3000}];

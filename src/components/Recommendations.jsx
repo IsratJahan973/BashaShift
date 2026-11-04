@@ -15,13 +15,22 @@ export function ApartmentPreferences({value,onChange,maxRent,onBudgetChange}) {
       <label className="field"><span>Priority / অগ্রাধিকার</span><select className="form-control" aria-label="Apartment priority" value={value.priority} onChange={e=>onChange(old=>({...old,priority:e.target.value}))}><option value="balanced">Balanced / ভারসাম্য</option><option value="affordability">Affordability / কম ভাড়া</option><option value="facilities">Optional facilities / সুবিধা</option><option value="area">Preferred area / এলাকা</option></select></label></div>
     <fieldset><legend>Required facilities / আবশ্যিক সুবিধা</legend><div className="check-row">{facilities.map(key=><label key={key} className="check-control"><input type="checkbox" checked={value.required.includes(key)} onChange={()=>toggle('required',key)}/>{labels[key]} required</label>)}</div></fieldset>
     <fieldset><legend>Optional facilities / ঐচ্ছিক সুবিধা</legend><div className="check-row">{facilities.map(key=><label key={key} className="check-control"><input type="checkbox" checked={value.optional.includes(key)} onChange={()=>toggle('optional',key)}/>{labels[key]} preferred</label>)}</div></fieldset>
-    <p className="small muted">Scores compare stated rent and listed facilities only; listings remain unverified. / তালিকার তথ্য অনুযায়ী মিল; তথ্য যাচাই করা হয়নি।</p>
+    <p className="small muted">Preference/value score measures your stated preferences and budget headroom. It is not apartment quality or verified reliability. Listings are unverified. / স্কোরটি আপনার পছন্দ ও বাজেটের হিসাব; এটি বাসার মান বা যাচাইকৃত নির্ভরযোগ্যতা নয়। তালিকা যাচাই করা হয়নি।</p>
   </section>;
 }
 export function ApartmentExplanation({recommendation}) {
-  return <div className="recommendation-explanation"><strong>{recommendation.match==='exact'?'Exact preference match / সম্পূর্ণ মিল':'Partial preference match / আংশিক মিল'}{recommendation.score!==null?` · ${recommendation.score}/100`:''}</strong>
+  return <div className="recommendation-explanation">
+    {recommendation.meetsRequiredCriteria&&<strong className="required-criteria-status">Meets all required criteria / সব আবশ্যিক শর্ত পূরণ</strong>}
+    <p className="preference-score">{recommendation.match==='exact'
+      ? 'All selected preferences match / বাছাই করা পছন্দের সবগুলো মিলে গেছে'
+      : 'Some selected preferences do not match / বাছাই করা কিছু পছন্দ মেলেনি'}
+      {recommendation.score!==null&&<> · Preference/value score / পছন্দ ও বাজেটের স্কোর: {recommendation.score}/100</>}
+    </p>
+    {recommendation.budgetRemaining!==null&&<p className="budget-headroom">
+      Budget headroom / বাজেটের বাকি: {money(recommendation.budgetRemaining)} below budget limit / সর্বোচ্চ ভাড়ার চেয়ে {money(recommendation.budgetRemaining)} কম
+    </p>}
     <ul>{recommendation.explanations.map(text=><li key={text}>{text}</li>)}</ul>
-    {recommendation.score!==null&&<details><summary>Why this score? / হিসাব দেখুন</summary><p>Weighted score / ওজন অনুযায়ী: affordability {recommendation.weights.affordability}, optional facilities {recommendation.weights.facilities}, area {recommendation.weights.area}. Missing preference dimensions are excluded. Affordability = (budget − rent) / budget; facilities = matched / requested; area = 1 or 0. / শুধু আপনার দেওয়া পছন্দের হিসাব।</p></details>}
+    {recommendation.score!==null&&<details><summary>Why this score? / হিসাব দেখুন</summary><p>Preference/value score is a weighted average of available dimensions: affordability {recommendation.weights.affordability}%, optional facilities {recommendation.weights.facilities}%, preferred area {recommendation.weights.area}%. Weights are re-normalized when a dimension is not requested. Affordability = (budget − rent) / budget; facilities = matched / requested; area = 1 for a match, otherwise 0. This score is not apartment quality or verified reliability. / স্কোরটি শুধু আপনার দেওয়া পছন্দ ও বাজেটের হিসাব; বাসার মান বা যাচাইকৃত নির্ভরযোগ্যতা নয়।</p></details>}
   </div>;
 }
 export function QuoteComparison({offers,workers,onChoose,saving}) {

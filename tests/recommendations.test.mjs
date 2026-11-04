@@ -24,6 +24,32 @@ test('priority changes weighted rankings without relaxing requirements; exact an
   assert.equal(suitable[1].explanations.some(x=>x.includes('parking')),true);
   assert.deepEqual(rankApartments(listings,{...prefs,required:['parking']}).map(p=>p.id),['fit']);
 });
+test('equal-to-budget apartments meet requirements while headroom and preference scores stay distinct',()=>{
+  const listings=[
+    property('at-limit',{rent:20000,parking:true}),
+    property('mid-price',{rent:16000,parking:false,area:'Mirpur'}),
+    property('lower-price',{rent:12000,parking:true,balcony:false}),
+  ];
+  const ranked=rankApartments(listings,{
+    maxBudget:20000,required:['lift'],optional:['parking'],preferredArea:'Banasree',
+    priority:'balanced',
+  });
+  assert.deepEqual(ranked.map(row=>row.id),['lower-price','at-limit','mid-price']);
+  const atLimit=ranked.find(row=>row.id==='at-limit');
+  assert.equal(atLimit.meetsRequiredCriteria,true);
+  assert.equal(atLimit.budgetRemaining,0);
+  assert.equal(atLimit.components.affordability,0);
+  assert.equal(atLimit.components.facilities,1);
+  assert.equal(atLimit.components.area,1);
+  assert.equal(atLimit.score,60);
+  assert.equal(atLimit.weights.affordability,40);
+  assert.equal(atLimit.weights.facilities,35);
+  assert.equal(atLimit.weights.area,25);
+  assert.equal(ranked.find(row=>row.id==='lower-price').budgetRemaining,8000);
+  assert.equal(ranked.find(row=>row.id==='lower-price').score,76);
+  assert.equal(ranked.find(row=>row.id==='mid-price').budgetRemaining,4000);
+  assert.equal(ranked.find(row=>row.id==='mid-price').score,8);
+});
 test('unknown facilities are never claimed, no preferences fabricate no score, sorting is stable',()=>{
   const listings=[property('b',{parking:undefined}),property('a',{parking:false})];
   const ranked=rankApartments(listings,{optional:['parking']});

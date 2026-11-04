@@ -8,13 +8,20 @@ with sync_playwright() as p:
         page=browser.new_page(viewport={'width':width,'height':844})
         errors=[]
         page.on('pageerror',lambda e:errors.append(str(e)))
+        page.route('**/api/scan',lambda route:route.fulfill(
+            status=200,content_type='application/json',
+            body='{"source":"openai","items":[{"name":"Bed","qty":2,"confidence":"medium"}]}'))
         page.goto('http://127.0.0.1:5192/tests/fixtures/guidance.html')
         results=page.get_by_label('Ranked apartments')
         expect(results.locator('article')).to_have_count(2)
+        expect(results.locator('article').nth(0).get_by_role('heading')).to_have_text('Test apartment B')
         page.get_by_label('Lift / লিফট required',exact=True).check()
         expect(results.locator('article')).to_have_count(1)
+        expect(results.get_by_text('Meets all required criteria / সব আবশ্যিক শর্ত পূরণ',exact=True)).to_be_visible()
+        expect(results.get_by_text('৳0 below budget limit',exact=False)).to_be_visible()
+        expect(results.get_by_text('Preference/value score / পছন্দ ও বাজেটের স্কোর:',exact=False)).to_be_visible()
         page.get_by_label('Parking / পার্কিং preferred',exact=True).check()
-        expect(results.get_by_text('Partial preference match / আংশিক মিল',exact=False)).to_be_visible()
+        expect(results.get_by_text('Some selected preferences do not match / বাছাই করা কিছু পছন্দ মেলেনি',exact=False)).to_be_visible()
         page.get_by_label('Exact maximum budget',exact=True).fill('10000')
         expect(results.locator('article')).to_have_count(0)
         page.get_by_label('Exact maximum budget',exact=True).fill('20000')

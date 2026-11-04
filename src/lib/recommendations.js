@@ -33,12 +33,17 @@ export function rankApartments(listings, preferences = {}) {
       };
       const totalWeight = Object.keys(components).reduce((n,key) => n + (components[key] === null ? 0 : weights[key]),0);
       const score = totalWeight ? Math.round(Object.keys(components).reduce((n,key) => n + (components[key] ?? 0) * weights[key],0) / totalWeight * 100) : null;
-      const explanations = ['Meets all hard requirements / সব আবশ্যিক শর্ত পূরণ'];
-      if(maxBudget !== '') explanations.push(`Rent is ${Math.round(Number(maxBudget) - Number(p.rent))} BDT within budget / বাজেটের মধ্যে`);
+      const budgetRemaining = maxBudget === '' ? null : Number(maxBudget) - Number(p.rent);
+      const explanations = [];
       if(preferredArea) explanations.push(areaMatch ? 'Preferred area / পছন্দের এলাকা' : 'Different from preferred area / পছন্দের এলাকার বাইরে');
       if(matched.length) explanations.push(`Listed optional facilities / তালিকায় আছে: ${matched.join(', ')}`);
       if(missing.length) explanations.push(`Optional facilities absent or unspecified / নেই বা উল্লেখ নেই: ${missing.join(', ')}`);
-      return { id:p.id, score, components, weights, match:areaMatch && !missing.length ? 'exact' : 'partial', explanations };
+      return {
+        id:p.id, score, components, weights, budgetRemaining,
+        meetsRequiredCriteria:true,
+        match:areaMatch && !missing.length ? 'exact' : 'partial',
+        explanations,
+      };
     }).sort((a,b) => (b.score ?? 0) - (a.score ?? 0) || compareId(a.id,b.id));
 }
 
