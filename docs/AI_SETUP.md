@@ -17,8 +17,10 @@ and does not change RLS, contact permissions, offers, or booking transitions.
    `@cf/meta/llama-3.2-11b-vision-instruct`. The token needs Workers AI Read/Edit
    permissions. The account owner must first accept the model's Meta license/AUP;
    the app never accepts terms automatically. See the [official model schema](https://developers.cloudflare.com/workers-ai/models/llama-3.2-11b-vision-instruct/).
-   Express sends sanitized JPEG data as the model's single `image` input plus
-   `prompt`, and reads the REST envelope's `result.response`. Multiple photos are
+   Express sends sanitized JPEG **raw base64, without `data:image/jpeg;base64,`**
+   as `image` alongside `prompt`, and reads the non-streaming REST envelope's
+   `result.response` string. A data URI is for the separate `image_url.url`
+   messages format, not top-level `image` ([REST schema](https://developers.cloudflare.com/api/resources/ai/methods/run/)). Multiple photos are
    combined into one bounded contact sheet so views are considered together.
 4. OpenAI is optional backup only: set `AI_ENABLE_OPENAI_FALLBACK=true` and
    backend `OPENAI_API_KEY` (or `BASHASHIFT_OPENAI_API_KEY`) to opt in. A key alone
@@ -124,8 +126,33 @@ responses, never a real key. It exercises the real upload route and local
 moving-request journey. The shared request payload is separately tested with
 a mocked RPC; this does not establish hosted persistence.
 
-Before the judge presentation, use permissioned furniture photos to verify a
-real scan (including repeated views, irrelevant/no-furniture photos, and poor
-lighting), review errors/costs, and test the shared request with a configured
-renter account. Label any mocked demonstration explicitly. See `PHASE3_QA.md`
-for the exact scope of completed verification and remaining blockers.
+### Minimal live check after an owner-approved deployment
+
+1. Manually deploy the reviewed fix on Render. Set server-only
+   `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AI_TOKEN` with Workers AI Read/Edit on that
+   account, and `AI_ENABLE_OPENAI_FALLBACK=false` to isolate Cloudflare. Keep
+   `AI_ALLOW_DEMO_SCAN=false` and the working Supabase public configuration.
+   Only the authorized account owner may review/accept Meta's terms; this app
+   never sends an agreement request or bypasses account eligibility.
+2. Sign in with an existing renter account at `https://bashashift.onrender.com`.
+   In Moving services, upload one permissioned JPEG/PNG of clearly visible
+   furniture, give consent, and click **Analyze photos**. Watch `/api/scan` in
+   the browser Network panel; do not copy/share its Authorization header or image.
+3. Require HTTP 200, `source:"cloudflare"`, the expected model,
+   `reviewRequired:true`, and sensible quantities for the actual photo. Suggestions
+   must await **Apply reviewed inventory**; discard them to leave data unchanged.
+   Do not publish a moving request or select a quotation to perform this check.
+4. On failure, copy only the response's `X-Request-ID`. Find that ID in Render
+   logs: scan diagnostics contain only `httpStatus`, numerical `providerCode`
+   (or null), and `requestId`. Per [Cloudflare's error reference](https://developers.cloudflare.com/workers-ai/platform/errors/),
+   5016 means missing model agreement (owner action); 5004 means invalid image
+   input; 401/403 can mean token/account permissions or eligibility; 429/3036
+   means quota; 408/3007/3008 means timeout/abort. Null status means no HTTP
+   response arrived. Check manual **Add** controls still work after failure.
+
+Health configuration flags, Playground results, and mocked tests do not prove
+authenticated inference. If Meta eligibility cannot be obtained, a candidate is
+[`@cf/mistralai/mistral-small-3.1-24b-instruct`](https://developers.cloudflare.com/workers-ai/models/mistral-small-3.1-24b-instruct/),
+with vision support and [Apache 2.0 licensing](https://mistral.ai/news/mistral-small-3-1/).
+Its real API access for this account is **unconfirmed**. No model switch is made;
+confirm authenticated image inference and applicable service terms before any switch.

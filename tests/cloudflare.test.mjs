@@ -19,7 +19,7 @@ const photo=async color=>'data:image/png;base64,'+(await sharp({create:{width:16
 const original=await photo('red'),other=await photo('blue');
 const sanitized=await validatePhotos({images:[original,other],consent:true});
 async function withServer(options,action){
-  const app=createApp({env,verifyRenter:async()=>({id:'renter-fixture',role:'renter'}),fetchImpl:async()=>Response.json(envelope(items)),dist:null,...options});
+  const app=createApp({env,verifyRenter:async()=>({id:'renter-fixture',role:'renter'}),fetchImpl:async()=>Response.json(envelope(items)),logScanFailure:()=>{},dist:null,...options});
   const server=app.listen(0,'127.0.0.1');await once(server,'listening');
   const url='http://127.0.0.1:'+server.address().port;
   const post=(body={images:[original],consent:true},headers={})=>fetch(url+'/api/scan',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer renter-session-fixture',...headers},body:JSON.stringify(body)});
@@ -39,7 +39,8 @@ test('primary Cloudflare REST request uses a sanitized image, fixed model and ba
     const body=JSON.parse(submitted.body);
     assert.deepEqual(Object.keys(body).sort(),['image','max_tokens','prompt','stream','temperature']);
     assert.equal(body.max_tokens,1200);assert.equal(body.temperature,0);assert.equal(body.stream,false);
-    assert.equal(body.image,sanitized[0]);assert.match(body.prompt,/largest clearly visible count/);
+    assert.equal(body.image,sanitized[0].split(',')[1]);assert.match(body.prompt,/largest clearly visible count/);
+    assert.doesNotMatch(body.image,/^data:/);assert.notEqual(body.prompt,'agree');
     assert.doesNotMatch(submitted.body,/private customer notes|renter-session-fixture/);
     assert.equal(submitted.body.includes(openKey),false);
     for(const value of [cloudToken,account,openKey])assert.equal(JSON.stringify(data).includes(value),false);
@@ -51,15 +52,48 @@ test('multiple sanitized views form one bounded, metadata-free contact sheet; du
   const tagged=await sharp(Buffer.from(original.split(',')[1],'base64')).jpeg().withMetadata({exif:{IFD0:{Artist:'private fixture metadata'}}}).toBuffer();
   const clean=await validatePhotos({images:['data:image/jpeg;base64,'+tagged.toString('base64'),other],consent:true});
   const sheet=await prepareCloudflareImage(clean);
-  const bytes=Buffer.from(sheet.split(',')[1],'base64'),metadata=await sharp(bytes).metadata();
+  const bytes=Buffer.from(sheet,'base64'),metadata=await sharp(bytes).metadata();
   assert.equal(metadata.format,'jpeg');assert.equal(metadata.width,1280);assert.equal(metadata.height,640);assert.equal(metadata.exif,undefined);
   assert.equal(bytes.includes(Buffer.from('private fixture metadata')),false);
-  assert.equal(await prepareCloudflareImage([sanitized[0],sanitized[0]]),sanitized[0]);
+  assert.equal(await prepareCloudflareImage([sanitized[0],sanitized[0]]),sanitized[0].split(',')[1]);
   let calls=0;
   await withServer({fetchImpl:async()=>{calls++;return Response.json(envelope(items));}},async post=>{
     const data=await(await post({images:[original,original,other],consent:true})).json();
     assert.deepEqual(data.items,items);assert.equal(calls,1);
   });
+});
+
+test('camera-sized JPEG/PNG fixtures reach REST as canonical base64 JPEG bytes after rotation, resizing and metadata removal',async()=>{
+  // Synthetic room with phone-photo dimensions/EXIF; this tests transport, not live recognition accuracy.
+  const room=Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1000"><rect width="1400" height="1000" fill="#ddd3c1"/><path d="M0 700H1400V1000H0Z" fill="#967450"/><path d="M0 0L180 120V700L0 1000M1400 0L1220 120V700L1400 1000" fill="#c9bca3"/><rect x="700" y="180" width="300" height="250" fill="#accbd7"/><rect x="200" y="570" width="500" height="200" rx="30" fill="#43766d"/><rect x="180" y="650" width="540" height="160" rx="20" fill="#365e57"/><rect x="850" y="680" width="200" height="70" fill="#573c2a"/><path d="M870 750V880M1030 750V880" stroke="#573c2a" stroke-width="20"/></svg>');
+  const jpeg=await sharp(room).resize(4032,3024,{fit:'fill'}).jpeg({quality:90})
+    .withMetadata({orientation:6,exif:{IFD0:{Artist:'private camera fixture'}}}).toBuffer();
+  const png=await sharp(room).resize(1800,1200,{fit:'fill'}).png().toBuffer();
+  const photos=['data:image/jpeg;base64,'+jpeg.toString('base64'),'data:image/png;base64,'+png.toString('base64')];
+  let submitted;
+  await withServer({fetchImpl:async(_url,init)=>{submitted=JSON.parse(init.body);return Response.json(envelope(items));}},async post=>{
+    for(const images of [[photos[0]],[photos[1]],photos]){
+      const response=await post({images,consent:true});assert.equal(response.status,200);
+      const clean=await validatePhotos({images,consent:true});
+      const expected=await prepareCloudflareImage(clean);
+      assert.equal(submitted.image,expected);
+      assert.match(submitted.image,/^[A-Za-z0-9+/]+={0,2}$/);
+      const bytes=Buffer.from(submitted.image,'base64'),metadata=await sharp(bytes).metadata();
+      assert.equal(bytes.toString('base64'),submitted.image);assert.equal(metadata.format,'jpeg');
+      assert.ok(metadata.width<=1280&&metadata.height<=1280);assert.equal(metadata.exif,undefined);
+      assert.equal(bytes.includes(Buffer.from('private camera fixture')),false);
+      if(images.length===1)assert.equal(submitted.image,clean[0].split(',')[1]);
+    }
+  });
+});
+
+test('documented REST JSON with usage/messages and a complete JSON fence remains valid without relaxing inventory validation',()=>{
+  const data=envelope(items);
+  data.result.usage={prompt_tokens:100,completion_tokens:40,total_tokens:140};
+  data.result.tool_calls=[];data.messages=[{code:1000,message:'provider metadata'}];
+  data.result.response=' \n```JSON\n'+JSON.stringify({items},null,2)+'\n``` \n';
+  assert.deepEqual(parseCloudflareInventory(data),items);
+  assert.deepEqual(parseCloudflareInventory({success:true,result:{response:' \n {"items": []} \n'}}),[]);
 });
 
 test('Cloudflare output normalizes safe category aliases but never defaults, rounds, clamps or guesses quantities',()=>{
@@ -92,6 +126,59 @@ test('Cloudflare HTTP/transport/provider failures preserve manual fallback and n
   for(const fetchImpl of [async()=>{throw new Error('private '+cloudToken);},async()=>new Response('not JSON'),async()=>Response.json({success:false,errors:[{code:5016,message:'private terms '+cloudToken}]}),async()=>Response.json({success:true,result:{response:'invalid'}})]){
     await withServer({fetchImpl},async post=>{const response=await post();assert.equal(response.status,502);assert.equal((await response.text()).includes(cloudToken),false);});
   }
+});
+
+test('provider agreement, input, authorization, quota and timeout failures log only safe status/code and a server correlation ID',async()=>{
+  for(const [status,code,expected] of [[403,5016,502],[400,5004,502],[401,10000,502],[403,10000,502],[429,3036,503],[408,3007,504],[200,5016,502]]){
+    const logs=[];let calls=0;
+    await withServer({logScanFailure:record=>logs.push(record),fetchImpl:async(_url,init)=>{
+      calls++;assert.notEqual(JSON.parse(init.body).prompt,'agree');
+      return Response.json({success:false,errors:[{code,message:`private ${cloudToken} ${account} ${original}`}],result:null},{status});
+    }},async post=>{
+      const response=await post(undefined,{'X-Request-ID':'private-client-correlation'});
+      assert.equal(response.status,expected);const data=await response.json();
+      assert.match(data.error,/manually/);assert.equal(Object.hasOwn(data,'items'),false);
+      assert.equal(data.code,expected===504?'ai_timeout':expected===503?'ai_busy':'ai_provider_error');
+      const requestId=response.headers.get('X-Request-ID');
+      assert.match(requestId,/^[a-f\d]{8}-(?:[a-f\d]{4}-){3}[a-f\d]{12}$/i);
+      assert.deepEqual(logs,[{httpStatus:status,providerCode:code,requestId}]);
+      for(const secret of [cloudToken,account,original,'private-client-correlation','private']){
+        assert.equal(JSON.stringify({data,logs}).includes(secret),false);
+      }
+      assert.equal(calls,1); // Never agree to terms, retry a different model, or silently use OpenAI.
+    });
+  }
+});
+
+test('malformed/non-JSON provider errors and transport failures cannot inject secrets into diagnostics',async()=>{
+  const cases=[
+    {status:403,code:null,fetchImpl:async()=>Response.json({errors:[{code:cloudToken,message:cloudToken}]},{status:403})},
+    {status:403,code:5016,fetchImpl:async()=>Response.json({errors:[{code:'5016',message:cloudToken}]},{status:403})},
+    {status:502,code:null,fetchImpl:async()=>new Response(cloudToken,{status:502})},
+    {status:200,code:null,fetchImpl:async()=>Response.json({success:true,result:{response:'{truncated '+cloudToken}})},
+    {status:null,code:null,fetchImpl:async()=>{throw new Error(cloudToken);}},
+  ];
+  for(const entry of cases){
+    const logs=[];
+    await withServer({logScanFailure:record=>logs.push(record),fetchImpl:entry.fetchImpl},async post=>{
+      const response=await post();assert.equal(response.status,502);
+      assert.deepEqual(logs,[{httpStatus:entry.status,providerCode:entry.code,requestId:response.headers.get('X-Request-ID')}]);
+      assert.equal((JSON.stringify(logs)+await response.text()).includes(cloudToken),false);
+    });
+  }
+});
+
+test('local inference timeout has a correlation ID and safe null status/code; diagnostic failures never break fallback',async()=>{
+  const logs=[];
+  await withServer({timeoutMs:30,logScanFailure:record=>logs.push(record),fetchImpl:async(_url,{signal})=>
+    new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(new Error(cloudToken)),{once:true}))},async post=>{
+    const response=await post();assert.equal(response.status,504);
+    assert.deepEqual(logs,[{httpStatus:null,providerCode:null,requestId:response.headers.get('X-Request-ID')}]);
+    assert.equal((await response.json()).code,'ai_timeout');
+  });
+  await withServer({logScanFailure:()=>{throw new Error(cloudToken);},fetchImpl:async()=>new Response('failed',{status:503})},async post=>{
+    const response=await post();assert.equal(response.status,503);assert.match((await response.json()).error,/manually/);
+  });
 });
 
 test('authorization, consent, photo sanitation and production demo restrictions run before Cloudflare',async()=>{
