@@ -1,6 +1,7 @@
 import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
+import {randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {EnvHttpProxyAgent,fetch as proxyFetch} from 'undici';
 import {ScanError,validatePhotos} from './ai.mjs';
@@ -21,19 +22,20 @@ function windowLimit(max,windowMs,clock){
   };
 }
 export function createApp({env=process.env,fetchImpl=outboundFetch,verifyRenter=createRenterVerifier(env,fetchImpl),
-  timeoutMs=25000,scanLimit=5,concurrencyLimit=2,clock=Date.now,
+  timeoutMs=25000,scanLimit=5,concurrencyLimit=2,clock=Date.now,logScanFailure,
   dist=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../dist')}={}){
   const app=express();app.disable('x-powered-by');
   // Render terminates the public connection at one ingress proxy. Trust only that hop.
   app.set('trust proxy',env.RENDER==='true'?1:false);
   app.use((_req,res,next)=>{res.set('X-Content-Type-Options','nosniff');next();});
   app.use('/api',(_req,res,next)=>{res.set('Cache-Control','no-store');next();});
-  const recognizer=createFurnitureRecognizer({env,fetchImpl,timeoutMs});
+  const recognizer=createFurnitureRecognizer({env,fetchImpl,timeoutMs,logScanFailure});
   const demoAllowed=env.AI_ALLOW_DEMO_SCAN==='true'&&env.NODE_ENV==='development';
   const attempts=windowLimit(40,60000,clock),scans=windowLimit(scanLimit,60000,clock);
   let active=0;
   app.get('/api/health',(_req,res)=>res.json({ok:true,aiConfigured:recognizer.configured,aiRequiresRenterLogin:!demoAllowed,aiDemoEnabled:demoAllowed}));
   app.post('/api/scan',async(req,res,next)=>{
+    req.scanRequestId=randomUUID();res.set('X-Request-ID',req.scanRequestId);
     try{
       if(!recognizer.configured)throw new ScanError(503,'ai_not_configured','AI photo analysis is not configured here. Add items manually.');
       const retry=attempts(req.ip);
@@ -60,7 +62,7 @@ export function createApp({env=process.env,fetchImpl=outboundFetch,verifyRenter=
     const disconnected=()=>{if(!res.writableEnded)controller.abort();};res.on('close',disconnected);
     try{
       const images=await validatePhotos(req.body);
-      const data=await recognizer.recognize({images,signal:controller.signal});
+      const data=await recognizer.recognize({images,signal:controller.signal,requestId:req.scanRequestId});
       if(!res.destroyed)res.json(data);
     }catch(error){if(!res.destroyed)next(error);}
     finally{active--;res.off('close',disconnected);}

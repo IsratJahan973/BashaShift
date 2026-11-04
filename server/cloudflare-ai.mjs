@@ -1,8 +1,11 @@
 import sharp from 'sharp';
+import {randomUUID} from 'node:crypto';
 import {furniture} from '../src/data.js';
 import {ScanError,parseInventoryItems} from './ai.mjs';
 
-// Official model input: prompt + one image (base64 data URI); REST output: result.response.
+// REST prompt/image input uses raw base64, without a data-URI prefix. Non-streaming output: result.response.
+// Data URIs belong to messages[].content[].image_url.url, a different input shape.
+// https://developers.cloudflare.com/api/resources/ai/methods/run/
 // https://developers.cloudflare.com/workers-ai/models/llama-3.2-11b-vision-instruct/
 // https://developers.cloudflare.com/workers-ai/guides/tutorials/llama-vision-tutorial/
 export const CLOUDFLARE_MODEL='@cf/meta/llama-3.2-11b-vision-instruct';
@@ -14,7 +17,7 @@ export async function prepareCloudflareImage(images,signal){
     throw new ScanError(400,'invalid_image','Use sanitized furniture photos or enter items manually.');
   }
   const unique=[...new Set(images)];
-  if(unique.length===1)return unique[0];
+  if(unique.length===1)return unique[0].split(',')[1];
   // The model accepts one image. Keep all views together rather than summing separate detections.
   const size=640,gap=16,columns=2,rows=Math.ceil(unique.length/columns);
   const panels=[];
@@ -26,7 +29,7 @@ export async function prepareCloudflareImage(images,signal){
   }
   const sheet=await sharp({create:{width:columns*size,height:rows*size,channels:3,background:'white'}}).composite(panels).jpeg({quality:80}).toBuffer();
   signal?.throwIfAborted();
-  return 'data:image/jpeg;base64,'+sheet.toString('base64');
+  return sheet.toString('base64');
 }
 
 export function parseCloudflareInventory(data){
@@ -41,23 +44,47 @@ export function parseCloudflareInventory(data){
   }catch{throw new ScanError(502,'invalid_ai_response','The photo analysis could not be read. Retry or enter items manually.');}
 }
 
-export async function recognizeCloudflareFurniture({images,accountId,token,fetchImpl,timeoutMs=25000,signal}){
+function providerErrorCode(data){
+  if(!Array.isArray(data?.errors))return null;
+  for(const error of data.errors){
+    const value=error?.code;
+    const code=typeof value==='number'?value:typeof value==='string'&&/^\d{1,9}$/.test(value)?Number(value):null;
+    if(Number.isSafeInteger(code)&&code>=0&&code<=999999999)return code;
+  }
+  return null;
+}
+
+function providerFailure(status,code){
+  if([408,504].includes(status)||[3007,3008].includes(code))return new ScanError(504,'ai_timeout','Photo analysis took too long. Retry or enter items manually.');
+  if([429,503].includes(status)||[3036,3040].includes(code))return new ScanError(503,'ai_busy','Photo analysis is busy. Retry shortly or enter items manually.');
+  // Includes 5016 (Meta agreement), 5004 (image), and 401/403 permissions/eligibility.
+  // Never accept agreements or expose upstream messages automatically.
+  return new ScanError(502,'ai_provider_error','Photo analysis is unavailable. Enter items manually or try again later.');
+}
+
+export async function recognizeCloudflareFurniture({images,accountId,token,fetchImpl,timeoutMs=25000,signal,
+  requestId=randomUUID(),logFailure=record=>console.warn(JSON.stringify(record))}){
   const timeout=AbortSignal.timeout(timeoutMs);
   const combined=signal?AbortSignal.any([signal,timeout]):timeout;
+  let httpStatus=null,providerCode=null;
   try{
     const image=await prepareCloudflareImage(images,combined);
     const response=await fetchImpl(`https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${CLOUDFLARE_MODEL}`,{
       method:'POST',signal:combined,headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
       body:JSON.stringify({prompt,image,max_tokens:1200,temperature:0,stream:false}),
     });
-    if(!response.ok){
-      if([429,503].includes(response.status))throw new ScanError(503,'ai_busy','Photo analysis is busy. Retry shortly or enter items manually.');
-      throw new ScanError(502,'ai_provider_error','Photo analysis is unavailable. Enter items manually or try again later.');
-    }
+    httpStatus=response.status;
     let data;
-    try{data=await response.json();}catch{throw new ScanError(502,'invalid_ai_response','The photo analysis could not be read. Enter items manually.');}
+    try{data=await response.json();}catch{
+      if(!response.ok)throw providerFailure(httpStatus,null);
+      throw new ScanError(502,'invalid_ai_response','The photo analysis could not be read. Enter items manually.');
+    }
+    providerCode=providerErrorCode(data);
+    if(!response.ok||data?.success===false||(Array.isArray(data?.errors)&&data.errors.length))throw providerFailure(httpStatus,providerCode);
     return {items:parseCloudflareInventory(data),source:'cloudflare',model:CLOUDFLARE_MODEL,reviewRequired:true};
   }catch(error){
+    // Allowlist only: never log exceptions, provider bodies/headers, URLs, images, or identity.
+    try{logFailure({httpStatus,providerCode,requestId});}catch{/* Diagnostics must not break manual fallback. */}
     if(combined.aborted)throw new ScanError(504,'ai_timeout','Photo analysis took too long. Retry or enter items manually.');
     if(error instanceof ScanError)throw error;
     throw new ScanError(502,'ai_unavailable','Photo analysis is unavailable. Your manual inventory is unchanged.');

@@ -1,14 +1,14 @@
 import {ScanError,recognizeFurniture as recognizeOpenAI} from './ai.mjs';
 import {recognizeCloudflareFurniture} from './cloudflare-ai.mjs';
 
-export function createFurnitureRecognizer({env,fetchImpl,timeoutMs=25000}){
+export function createFurnitureRecognizer({env,fetchImpl,timeoutMs=25000,logScanFailure}){
   const accountId=env.CLOUDFLARE_ACCOUNT_ID?.trim()||'',token=env.CLOUDFLARE_AI_TOKEN?.trim()||'';
   const cloudflareReady=/^[a-f\d]{32}$/i.test(accountId)&&token.length>0&&token.length<=8192&&!/\s/.test(token);
   const key=(env.OPENAI_API_KEY||env.BASHASHIFT_OPENAI_API_KEY||'').trim();
   const fallbackReady=env.AI_ENABLE_OPENAI_FALLBACK==='true'&&Boolean(key);
   return {
     configured:cloudflareReady||fallbackReady,
-    async recognize({images,signal}){
+    async recognize({images,signal,requestId}){
       if(!cloudflareReady&&!fallbackReady)throw new ScanError(503,'ai_not_configured','AI photo analysis is not configured here. Add items manually.');
       const overall=AbortSignal.timeout(timeoutMs);
       const combined=signal?AbortSignal.any([signal,overall]):overall;
@@ -16,7 +16,7 @@ export function createFurnitureRecognizer({env,fetchImpl,timeoutMs=25000}){
       if(cloudflareReady){
         try{
           // Reserve part of the existing total deadline for an explicitly enabled backup.
-          return await recognizeCloudflareFurniture({images,accountId,token,fetchImpl,signal:combined,
+          return await recognizeCloudflareFurniture({images,accountId,token,fetchImpl,signal:combined,requestId,logFailure:logScanFailure,
             timeoutMs:fallbackReady?Math.max(1,Math.floor(timeoutMs*0.6)):timeoutMs});
         }catch(error){
           if(!fallbackReady||combined.aborted||!(error instanceof ScanError)||error.status<500)throw error;
