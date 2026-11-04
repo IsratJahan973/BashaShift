@@ -37,12 +37,21 @@ export async function prepareCloudflareImage(images,signal){
 export function parseCloudflareInventory(data){
   try{
     if(data?.success!==true || (data.errors!==undefined&&(!Array.isArray(data.errors)||data.errors.length)) || typeof data.result?.response!=='string')throw new Error('Invalid provider envelope');
-    let text=data.result.response.trim();
+    const text=data.result.response.trim();
     if(!text || text.length>16000)throw new Error('Invalid output length');
-    // Accept one entire JSON fence, never extract a guessed JSON fragment from prose.
-    const fenced=text.match(/^```(?:json)?\s*\n?([\s\S]*?)\s*```$/i);
-    if(fenced)text=fenced[1];
-    return parseInventoryItems(JSON.parse(text),{normalizeNames:true});
+    let parsed;
+    try{parsed=JSON.parse(text);}catch{
+      // Some vision models wrap otherwise valid JSON in an explanation or a code fence.
+      // Only accept one unambiguous JSON object, and still validate every inventory field.
+      const fenced=[...text.matchAll(/```(?:json)?[ \t]*\r?\n([\s\S]*?)```/gi)];
+      if(fenced.length===1)parsed=JSON.parse(fenced[0][1].trim());
+      else if(fenced.length===0){
+        const start=text.indexOf('{'),end=text.lastIndexOf('}');
+        if(start<0||end<=start)throw new Error('No JSON object');
+        parsed=JSON.parse(text.slice(start,end+1));
+      }else throw new Error('Ambiguous JSON blocks');
+    }
+    return parseInventoryItems(parsed,{normalizeNames:true});
   }catch{throw new ScanError(502,'invalid_ai_response','The photo analysis could not be read. Retry or enter items manually.');}
 }
 
