@@ -110,6 +110,27 @@ test('Mistral REST responses preserve review and strict quantities, accept usage
   });
 });
 
+test('Mistral explanatory wrappers preserve strict inventory validation',async()=>{
+  const textInventory='{"items":[{"name":"Sofa","qty":1,"confidence":"medium"}]}';
+  const responses=[
+    'Here is the moving inventory:\\n'+textInventory,
+    '```json\\n'+textInventory+'\\n```',
+    'Detected furniture:\\n```json\\n'+textInventory+'\\n```\\nPlease review.',
+  ];
+  for(const raw of responses){
+    const response=parseCloudflareInventory({success:true,errors:[],result:{response:raw.replaceAll('\\n','\n')}});
+    assert.deepEqual(response,[{name:'Sofa',qty:1,confidence:'medium'}]);
+  }
+  for(const raw of [
+    'No furniture found.',
+    '{"items":[{"name":"Car","qty":1,"confidence":"high"}]}',
+    'First ```json\\n'+textInventory+'\\n``` second ```json\\n'+textInventory+'\\n```',
+    '{"items":[{"name":"Bed","qty":"1","confidence":"high"}]}',
+  ]){
+    assert.throws(()=>parseCloudflareInventory({success:true,errors:[],result:{response:raw.replaceAll('\\n','\n')}}),e=>e.code==='invalid_ai_response');
+  }
+});
+
 test('multiple sanitized views form one bounded, metadata-free contact sheet; duplicate photos are not summed',async()=>{
   const tagged=await sharp(Buffer.from(original.split(',')[1],'base64')).jpeg().withMetadata({exif:{IFD0:{Artist:'private fixture metadata'}}}).toBuffer();
   const clean=await validatePhotos({images:['data:image/jpeg;base64,'+tagged.toString('base64'),other],consent:true});
