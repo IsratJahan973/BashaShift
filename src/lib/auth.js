@@ -60,3 +60,17 @@ export async function loginAccount(client, email, password) {
   if (error) throw error;
   return data;
 }
+
+export async function requestPasswordReset(client, email, redirectTo) {
+  const address = email.trim();
+  if (!address || !address.includes('@')) throw new Error('Enter your email address.');
+  const { error } = await client.auth.resetPasswordForEmail(address, { redirectTo });
+  if (error) throw error;
+}
+
+export async function updateAccountPassword(client, password) {
+  if (!password || password.length < 8) throw new Error('Use a password with at least 8 characters.');
+  const { data, error } = await client.auth.updateUser({ password });
+  if (error) throw error;
+  return data;
+}

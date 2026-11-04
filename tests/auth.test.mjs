@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { loginAccount, readSupabaseConfig, registerAccount, registrationData } from '../src/lib/auth.js';
+import { loginAccount, readSupabaseConfig, registerAccount, registrationData, requestPasswordReset, updateAccountPassword } from '../src/lib/auth.js';
 
 const publicKey = () => 'sb_publishable_'+randomUUID();
 const form = () => ({ email: ' renter@example.test ', password: randomUUID(), role: 'renter', display_name: ' Test Renter ', phone: '018-1234-5678' });
@@ -47,4 +47,21 @@ test('successful login uses Supabase Auth and retains the returned session', asy
   const client = { auth:{ signInWithPassword:async value => { submitted=value;return { data:{ session }, error:null }; } } };
   assert.equal((await loginAccount(client, ' renter@example.test ', randomUUID())).session, session);
   assert.equal(submitted.email, 'renter@example.test');
+});
+test('password recovery requests a reset link using a normalized email and callback URL', async () => {
+  let submitted;
+  const client = { auth:{ resetPasswordForEmail:async (...args) => { submitted=args;return { error:null }; } } };
+  await requestPasswordReset(client, ' renter@example.test ', 'https://bashashift.example');
+  assert.deepEqual(submitted, ['renter@example.test', { redirectTo:'https://bashashift.example' }]);
+  await assert.rejects(requestPasswordReset(client, 'invalid', 'https://bashashift.example'), /Enter your email address/);
+});
+test('password update validates length and propagates Supabase Auth failures', async () => {
+  const failure = new Error('Auth session missing');
+  const client = { auth:{ updateUser:async ({ password }) => ({ data:{ user:{ password } }, error:failure }) } };
+  await assert.rejects(updateAccountPassword(client, 'short'), /at least 8 characters/);
+  await assert.rejects(updateAccountPassword(client, randomUUID()), failure);
+  let updated;
+  const successfulClient = { auth:{ updateUser:async value => { updated=value;return { data:{ user:{ id:randomUUID() } }, error:null }; } } };
+  await updateAccountPassword(successfulClient, 'long-enough-password');
+  assert.deepEqual(updated, { password:'long-enough-password' });
 });

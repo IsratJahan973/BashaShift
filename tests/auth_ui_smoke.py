@@ -9,6 +9,7 @@ import os
 import secrets
 from threading import Thread
 import time
+from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 from playwright.sync_api import expect, sync_playwright
 
@@ -45,6 +46,8 @@ with app_server() as base_url, sync_playwright() as p:
         encode = lambda value: base64.urlsafe_b64encode(json.dumps(value).encode()).decode().rstrip('=')
         token = '.'.join([encode({'alg':'HS256','typ':'JWT'}), encode({'sub':uid,'aud':'authenticated','role':'authenticated','exp':int(time.time())+3600}), secrets.token_urlsafe(32)])
         signup_roles = []
+        recovery_requests = []
+        password_updates = []
 
         def respond(route, body, status=200):
             route.fulfill(status=status, content_type='application/json', body=json.dumps(body), headers={
@@ -66,7 +69,12 @@ with app_server() as base_url, sync_playwright() as p:
                 else:
                     respond(route, {'access_token':token,'refresh_token':secrets.token_urlsafe(32),'expires_in':3600,'token_type':'bearer','user':user})
             elif '/auth/v1/user' in request.url:
+                if request.method == 'PUT':
+                    password_updates.append(request.post_data_json.get('password'))
                 respond(route, user)
+            elif '/auth/v1/recover' in request.url:
+                recovery_requests.append({'url':request.url,'body':request.post_data_json})
+                respond(route, {})
             elif '/auth/v1/logout' in request.url:
                 respond(route, {})
             elif '/rest/v1/profiles' in request.url:
@@ -92,6 +100,14 @@ with app_server() as base_url, sync_playwright() as p:
         assert signup_roles == [role]
         assert page.get_by_role('button', name='Sign out', exact=True).count() == 0
         dialog.get_by_role('button', name='Already registered? Sign in', exact=True).click()
+        dialog.get_by_role('button', name='Forgot password?', exact=True).click()
+        dialog.get_by_label('Email address', exact=True).fill(email)
+        dialog.get_by_role('button', name='Send reset link', exact=True).click()
+        expect(dialog.get_by_role('status')).to_contain_text('If an account exists for this email')
+        assert len(recovery_requests) == 1
+        assert recovery_requests[0]['body']['email'] == email
+        assert parse_qs(urlparse(recovery_requests[0]['url']).query)['redirect_to'] == [base_url]
+        dialog.get_by_role('button', name='Back to sign in', exact=True).click()
         dialog.get_by_label('Email address', exact=True).fill('invalid@example.test')
         dialog.get_by_label('Password', exact=True).fill(password)
         dialog.get_by_role('button', name='Sign in', exact=True).click()
@@ -113,7 +129,22 @@ with app_server() as base_url, sync_playwright() as p:
         assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'Mobile overflow'
         page.get_by_role('button', name='Sign out', exact=True).click()
         page.get_by_role('button', name='Sign in', exact=True).wait_for()
+        recovery_token = secrets.token_urlsafe(32)
+        page.goto(f'{base_url}/?callback=1#access_token={token}&refresh_token={recovery_token}&expires_in=3600&token_type=bearer&type=recovery')
+        dialog = page.get_by_role('dialog', name='Account access')
+        expect(dialog.get_by_role('heading', name='Choose a new password')).to_be_visible()
+        dialog.get_by_label('Password', exact=True).fill('a-new-secure-password')
+        dialog.get_by_label('Confirm new password', exact=True).fill('a-different-password')
+        dialog.get_by_role('button', name='Update password', exact=True).click()
+        expect(dialog.get_by_role('alert')).to_contain_text('Passwords do not match')
+        assert password_updates == []
+        dialog.get_by_label('Password', exact=True).fill('a-new-secure-password')
+        dialog.get_by_label('Confirm new password', exact=True).fill('a-new-secure-password')
+        dialog.get_by_role('button', name='Update password', exact=True).click()
+        expect(dialog.get_by_role('status')).to_contain_text('Your password has been updated')
+        assert password_updates == ['a-new-secure-password']
+        dialog.get_by_role('button', name='Continue to BashaShift', exact=True).click()
         assert not errors, errors
         context.close()
-        print(f'PASS mocked Auth UI ({role}): confirmation pending, invalid login, sign in/out, role workspace, mobile layout, demo isolation.')
+        print(f'PASS mocked Auth UI ({role}): signup, reset email, reset callback, password update, login, sign out, role workspace, mobile layout, demo isolation.')
     browser.close()

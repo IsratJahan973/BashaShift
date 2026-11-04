@@ -44,9 +44,8 @@ with sync_playwright() as p:
     page.get_by_label('Approx. distance (km)',exact=True).fill('8')
     page.get_by_label('Destination floor',exact=True).fill('3')
     page.get_by_label('Working lift accessible at both buildings').uncheck()
-    expect(page.locator('.quote-total strong')).to_have_text('৳3,800')
-    expect(page.get_by_label('Moving cost breakdown')).to_contain_text('Furniture handling')
-    expect(page.get_by_label('Moving cost breakdown')).to_contain_text('৳2,080')
+    expect(page.get_by_text('MOVER QUOTATIONS',exact=True)).to_be_visible()
+    assert page.locator('.quote-total,.cost-breakdown').count()==0,'Platform moving prices must not be displayed'
     for width in [390,360]:
         page.set_viewport_size({'width':width,'height':844})
         assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'),'Photo review overflows mobile width'
@@ -54,14 +53,24 @@ with sync_playwright() as p:
     contact(page)
     page.get_by_role('button',name='Publish moving request',exact=True).click()
     expect(page.get_by_role('heading',name='My requests',exact=True)).to_be_visible()
+    expect(page.get_by_text('Waiting for mover quotations.',exact=True)).to_be_visible()
     data=page.evaluate('(key)=>JSON.parse(localStorage.getItem(key))',storage)
     request=data['requests'][0]
     assert {item['name']:item['qty'] for item in request['items']}=={'Bed':3,'Boxes':5,'Sofa':1}
-    assert request['estimate']==3800 and request['status']=='open' and request['offers']==[] and request['selectedOfferId'] is None
+    assert request['estimate']==0 and request['status']=='open' and request['offers']==[] and request['selectedOfferId'] is None
     assert all(worker['sample'] for worker in data['workers'])
+    page.get_by_role('navigation',name='Main navigation').get_by_role('button',name='Mover desk',exact=True).click()
+    expect(page.get_by_label('Your quotation (BDT)')).to_have_value('')
+    page.get_by_label('Your quotation (BDT)').fill('3850')
+    page.get_by_role('button',name='Submit quotation',exact=True).click()
+    page.get_by_role('navigation',name='Main navigation').get_by_role('button',name='My requests 1').click()
+    expect(page.get_by_text('৳3,850',exact=True)).to_be_visible()
+    page.get_by_role('button',name='Choose',exact=True).click()
+    assert page.evaluate('(key)=>JSON.parse(localStorage.getItem(key)).requests[0].offers[0].amount',storage)==3850
+    assert page.evaluate('(key)=>JSON.parse(localStorage.getItem(key)).requests[0].status',storage)=='awaiting_call'
     assert not errors,errors
     context.close()
-    print('PASS photo → real validated backend → mocked OpenAI → edited/approved inventory → manual addition → transparent ৳3,800 estimate → open demo moving request; 360/390px responsive.')
+    print('PASS photo -> validated inventory -> manual addition -> price-free moving request -> independent mover quotation -> renter comparison and selection; 360/390px responsive.')
 
     context=browser.new_context(viewport={'width':1440,'height':1000})
     page=context.new_page();page.set_default_timeout(7000)
