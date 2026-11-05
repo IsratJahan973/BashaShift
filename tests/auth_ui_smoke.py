@@ -20,6 +20,46 @@ args = parser.parse_args()
 # Auth callbacks cross SDK/session and React updates; keep assertions bounded together.
 expect.set_options(timeout=15000)
 
+EVENT_ART_URL = 'https://d112y698adiu2z.cloudfront.net/photos/production/challenge_photos/005/545/026/datas/full_width.png'
+# Geometry only: never a copy or imitation of the organizer's artwork.
+EVENT_ART_FIXTURE = '''<svg xmlns="http://www.w3.org/2000/svg" width="1169" height="155">
+<rect x="430" y="5" width="310" height="145" rx="8" fill="#dbe2e6"/>
+<text x="585" y="70" text-anchor="middle" font-family="sans-serif" font-size="28">IMAGE FIXTURE</text>
+<text x="585" y="105" text-anchor="middle" font-family="sans-serif" font-size="19">NOT OFFICIAL ARTWORK</text></svg>'''
+
+
+def check_event_branding(page, name, image_loaded=True):
+    banner = page.get_by_role('complementary', name='Buildathon event branding')
+    expect(banner).to_have_count(1)
+    link = banner.get_by_role('link')
+    expect(link).to_have_attribute('href', 'https://yunet-aignite26.devpost.com/')
+    expect(link).to_have_attribute('rel', 'noopener noreferrer')
+    assert page.locator('.site-header').evaluate("header => header.previousElementSibling.matches('.event-branding')")
+    viewport = page.viewport_size
+    for width in [1440, 390, 360]:
+        page.set_viewport_size({'width': width, 'height': 1000 if width == 1440 else 844})
+        page.evaluate('window.scrollTo(0, 0)')
+        expect(banner).to_be_visible()
+        assert banner.bounding_box()['y'] == 0
+        assert banner.bounding_box()['height'] <= 88
+        assert page.locator('.site-header').bounding_box()['y'] == banner.bounding_box()['height']
+        if image_loaded:
+            artwork = banner.get_by_role('img')
+            expect(artwork).to_have_attribute('src', EVENT_ART_URL)
+            expect(artwork).to_have_attribute('referrerpolicy', 'no-referrer')
+            page.wait_for_function("document.querySelector('.event-branding img')?.naturalWidth > 0")
+            image_box = artwork.bounding_box()
+            natural_ratio = artwork.evaluate('img => img.naturalWidth / img.naturalHeight')
+            assert abs(image_box['width'] / image_box['height'] - natural_ratio) < 0.01
+            assert image_box['height'] == 76
+        else:
+            expect(banner.get_by_role('img')).to_have_count(0)
+            expect(link).to_have_text('Ostad Presents YUNet AIgnite Buildathon 2026')
+            assert link.bounding_box()['width'] <= width - 32
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), 'Branding overflow'
+    page.set_viewport_size(viewport)
+    capture(page, name)
+
 
 @contextmanager
 def app_server():
@@ -99,8 +139,15 @@ with app_server() as base_url, sync_playwright() as p:
         page.route('http://127.0.0.1:54329/**', api)
         page.route('https://fonts.googleapis.com/**', lambda route: route.abort())
         page.route('https://fonts.gstatic.com/**', lambda route: route.abort())
+        def event_art(route):
+            assert 'authorization' not in route.request.headers
+            assert 'referer' not in route.request.headers
+            route.fulfill(content_type='image/svg+xml', body=EVENT_ART_FIXTURE)
+        page.route(EVENT_ART_URL, event_art)
         page.goto(base_url+'?demo=1', wait_until='domcontentloaded')
         expect(page.locator('.home-card')).to_have_count(1)
+        if role == 'owner':
+            check_event_branding(page, 'branding-public-image-fixture')
         assert 'demo=' not in page.url
         expect(page.get_by_text('Exact preference match',exact=True)).to_have_count(0)
         page.get_by_role('button',name='Plan a move',exact=True).click()
@@ -139,6 +186,7 @@ with app_server() as base_url, sync_playwright() as p:
         dashboard_descriptions={'owner':'Manage listings and viewing inquiries','renter':'Find homes, plan moves, track requests','mover':'Find jobs, submit quotes, manage bookings'}
         expect(page.get_by_role('heading',name=dashboard_titles[role],exact=True)).to_be_visible()
         expect(page.get_by_text(dashboard_descriptions[role],exact=True)).to_be_visible()
+        check_event_branding(page, 'branding-'+role+'-image-fixture')
         page.get_by_role('navigation', name='Main navigation').get_by_role('button', name=workspace, exact=True).click()
         if role == 'owner':
             expect(page.get_by_label('Owner name *', exact=True)).to_have_value(profile['display_name'])
@@ -218,6 +266,14 @@ with app_server() as base_url, sync_playwright() as p:
         expect(dialog.get_by_role('status')).to_contain_text('Your password has been updated')
         assert password_updates == ['a-new-secure-password']
         dialog.get_by_role('button', name='Continue to BashaShift', exact=True).click()
+        if role == 'owner':
+            page.unroute(EVENT_ART_URL, event_art)
+            page.route(EVENT_ART_URL, lambda route: route.fulfill(status=503, body=''))
+            page.set_viewport_size({'width':1440,'height':1000})
+            page.reload(wait_until='domcontentloaded')
+            page.get_by_role('navigation', name='Main navigation').get_by_role('button', name=workspace, exact=True).click()
+            expect(page.get_by_role('heading', name=dashboard_titles[role], exact=True)).to_be_visible()
+            check_event_branding(page, 'branding-unavailable-fallback', image_loaded=False)
         assert not errors, errors
         context.close()
         print(f'PASS mocked Auth UI ({role}): signup, reset email, reset callback, password update, login, sign out, role workspace, mobile layout, demo isolation.')
