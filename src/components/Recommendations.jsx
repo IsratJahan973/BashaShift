@@ -21,7 +21,7 @@ export function ApartmentExplanation({recommendation,listing}) {
   const reasons=[];
   if(recommendation.budgetRemaining!==null)reasons.push('Within budget · '+money(recommendation.budgetRemaining)+' remaining');
   if(recommendation.components.area!==null)reasons.push(recommendation.components.area===1?'Preferred area':'Outside preferred area');
-  if(reasons.length<2&&listing)reasons.push(listing.area+' · '+listing.beds+' bedrooms');
+  if(reasons.length<2&&listing)reasons.push(listing.area,listing.beds+' bedrooms');
   if(reasons.length<2&&recommendation.components.facilities!==null)reasons.push(recommendation.components.facilities===1?'All optional facilities listed':'Some optional facilities missing');
   return <div className="recommendation-explanation">
     {recommendation.meetsRequiredCriteria&&<strong className="required-criteria-status">Matches your requirements</strong>}

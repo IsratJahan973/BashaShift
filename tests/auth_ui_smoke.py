@@ -137,6 +137,7 @@ with app_server() as base_url, sync_playwright() as p:
             # Authenticated UI journey; both Auth and the provider endpoint are HTTP fixtures.
             page.get_by_role('navigation',name='Main navigation').get_by_role('button',name='Explore homes',exact=True).click()
             expect(page.locator('.home-card')).to_have_count(1)
+            expect(page.locator('.match-reasons li')).to_have_count(2)
             expect(page.get_by_label('Maximum monthly rent',exact=True)).to_have_count(1)
             page.get_by_label('Maximum monthly rent',exact=True).fill('20000')
             expect(page.get_by_text('Matches your requirements',exact=True)).to_be_visible()
