@@ -19,8 +19,13 @@ and does not change RLS, contact permissions, offers, or booking transitions.
    Mistral is also the default when the model variable is absent or blank.
    Its [documented schema](https://github.com/cloudflare/cloudflare-docs/blob/production/src/content/workers-ai-models/mistral-small-3.1-24b-instruct.json)
    uses a user `messages` entry with `text` and `image_url` content parts; the
-   latter contains a sanitized `data:image/jpeg;base64,...` URI. The non-streaming
-   REST envelope's `result.response` is a string. Multiple photos are combined
+   latter contains a sanitized `data:image/jpeg;base64,...` URI. Mistral's documented
+   `guided_json` requests the inventory schema. The model schema describes
+   `result.response` text; [structured output](https://developers.cloudflare.com/workers-ai/features/json-mode/)
+   may already be an object. Both are strictly validated. A directly structured
+   `result` inventory is also accepted only if its exact schema is valid.
+   One JSON object inside prose/a fence is accepted; conflicting or incomplete
+   JSON is rejected without repairing counts or inventing fields. Multiple photos are combined
    into one bounded contact sheet so views are considered together.
    Eligible accounts may explicitly select
    `CLOUDFLARE_VISION_MODEL=@cf/meta/llama-3.2-11b-vision-instruct`, which retains
@@ -144,8 +149,8 @@ a mocked RPC; this does not establish hosted persistence.
    No Meta agreement is requested for Mistral; account API access must still be
    confirmed. Never accept terms or bypass eligibility to perform this check.
 2. Sign in with an existing renter account at `https://bashashift.onrender.com`.
-   In Moving services, upload one permissioned JPEG/PNG of clearly visible
-   furniture, give consent, and click **Analyze photos**. Watch `/api/scan` in
+   In Moving services, upload one permissioned JPEG/PNG of a clearly visible
+   supported item (such as a bed or sofa), consent, and click **Analyze photos**. Watch `/api/scan` in
    the browser Network panel; do not copy/share its Authorization header or image.
 3. Require HTTP 200, `source:"cloudflare"`,
    `model:"@cf/mistralai/mistral-small-3.1-24b-instruct"`,
@@ -153,8 +158,11 @@ a mocked RPC; this does not establish hosted persistence.
    must await **Apply reviewed inventory**; discard them to leave data unchanged.
    Do not publish a moving request or select a quotation to perform this check.
 4. On failure, copy only the response's `X-Request-ID`. Find that ID in Render
-   logs: scan diagnostics contain only `httpStatus`, numerical `providerCode`
-   (or null), and `requestId`. Per [Cloudflare's error reference](https://developers.cloudflare.com/workers-ai/platform/errors/),
+   logs: diagnostics contain `httpStatus`, numerical `providerCode` (or null),
+   and `requestId`. Parser failures also include `stage` (`provider_json`,
+   `provider_envelope`, `response_shape`, `inventory_json`, or `inventory_schema`)
+   and `responseShape` with type labels only. No provider content, keys, images,
+   credentials, or personal data are logged. Per [Cloudflare's error reference](https://developers.cloudflare.com/workers-ai/platform/errors/),
    5016 means missing model agreement (owner action); 5004 means invalid image
    input; 401/403 can mean token/account permissions or eligibility; 429/3036
    means quota; 408/3007/3008 means timeout/abort. Null status means no HTTP

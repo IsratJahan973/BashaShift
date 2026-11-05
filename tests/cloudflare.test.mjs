@@ -37,13 +37,22 @@ test('default Mistral REST request uses multimodal messages, a sanitized JPEG da
     assert.equal(submitted.url,`https://api.cloudflare.com/client/v4/accounts/${account}/ai/run/${CLOUDFLARE_MISTRAL_MODEL}`);
     assert.equal(submitted.headers.Authorization,'Bearer '+cloudToken);
     const body=JSON.parse(submitted.body);
-    assert.deepEqual(Object.keys(body).sort(),['max_tokens','messages','stream','temperature']);
+    assert.deepEqual(Object.keys(body).sort(),['guided_json','max_tokens','messages','stream','temperature']);
     assert.equal(body.max_tokens,1200);assert.equal(body.temperature,0);assert.equal(body.stream,false);
     assert.equal(body.messages.length,1);assert.equal(body.messages[0].role,'user');
     const content=body.messages[0].content;assert.equal(content.length,2);
     assert.deepEqual(content[1],{type:'image_url',image_url:{url:sanitized[0]}});
     assert.equal(content[0].type,'text');assert.match(content[0].text,/largest clearly visible count/);
     assert.notEqual(content[0].text,'agree');
+    assert.doesNotMatch(content[0].text,/"name":"Bed","qty":1/);
+    const schema=body.guided_json;
+    assert.equal(schema.additionalProperties,false);assert.deepEqual(schema.required,['items']);
+    assert.equal(schema.properties.items.maxItems,8);
+    assert.equal(schema.properties.items.items.additionalProperties,false);
+    assert.deepEqual(schema.properties.items.items.required,['name','qty','confidence']);
+    assert.deepEqual(schema.properties.items.items.properties.qty,{type:'integer',minimum:1,maximum:100});
+    assert.ok(schema.properties.items.items.properties.name.enum.includes('Bed'));
+    assert.equal(schema.properties.items.items.properties.name.enum.includes('Car'),false);
     assert.doesNotMatch(submitted.body,/private customer notes|renter-session-fixture/);
     assert.equal(submitted.body.includes(openKey),false);
     for(const value of [cloudToken,account,openKey])assert.equal(JSON.stringify(data).includes(value),false);
@@ -93,21 +102,73 @@ test('Mistral REST responses preserve review and strict quantities, accept usage
   valid.result.response='```json\n'+valid.result.response+'\n```';
   valid.result.usage={prompt_tokens:120,completion_tokens:30,total_tokens:150};valid.result.tool_calls=[];
   const cases=[
-    [valid,200],[envelope([]),200],
-    [{success:true,result:{response:{items}}},502],
+    [valid,200,[{name:'Sofa',qty:2,confidence:'medium'}]],[envelope([]),200,[]],
+    [{success:true,result:{response:{items}}},200,items],
+    [{success:true,result:{items}},200,items],
     [{success:true,result:{response:'{"items":['}},502],
     [envelope([{name:'Sofa',qty:'2',confidence:'high'}]),502],
     [envelope([{name:'Car',qty:1,confidence:'high'}]),502],
   ];
   let current;
   await withServer({scanLimit:10,fetchImpl:async url=>{assert.ok(url.endsWith('/'+CLOUDFLARE_MISTRAL_MODEL));return Response.json(current);}},async post=>{
-    for(const [data,status] of cases){
+    for(const [data,status,expected] of cases){
       current=data;const response=await post();assert.equal(response.status,status);const result=await response.json();
       if(status===200){assert.equal(result.reviewRequired,true);assert.equal(result.model,CLOUDFLARE_MISTRAL_MODEL);
-        assert.deepEqual(result.items,data===valid?[{name:'Sofa',qty:2,confidence:'medium'}]:[]);
+        assert.deepEqual(result.items,expected);
       }else{assert.equal(result.code,'invalid_ai_response');assert.equal(Object.hasOwn(result,'items'),false);assert.match(result.error,/manually/);}
     }
   });
+});
+
+test('Mistral explanatory wrappers preserve strict inventory validation',async()=>{
+  const textInventory='{"items":[{"name":"Sofa","qty":1,"confidence":"medium"}]}';
+  const responses=[
+    'Here is the moving inventory:\n'+textInventory,
+    '```json\n'+textInventory+'\n```',
+    'Detected furniture:\n```json\n'+textInventory+'\n```\nPlease review.',
+    '```json '+textInventory+'```',
+    '```\r\n'+textInventory+'\r\n```',
+    'Inventory follows:\n'+textInventory+'\nPlease review the counts.',
+  ];
+  for(const responseText of responses){
+    const response=parseCloudflareInventory({success:true,errors:[],result:{response:responseText}});
+    assert.deepEqual(response,[{name:'Sofa',qty:1,confidence:'medium'}]);
+  }
+  for(const responseText of [
+    'No furniture found.',
+    '{"items":[{"name":"Car","qty":1,"confidence":"high"}]}',
+    'First ```json\n'+textInventory+'\n``` second ```json\n'+textInventory+'\n```',
+    '{"items":[{"name":"Bed","qty":"1","confidence":"high"}]}',
+  ]){
+    assert.throws(()=>parseCloudflareInventory({success:true,errors:[],result:{response:responseText}}),e=>e.code==='invalid_ai_response');
+  }
+});
+
+test('structured inventory responses are validated without coercing counts or synthesizing missing fields',()=>{
+  for(const result of [{response:{items}},{items}]){
+    assert.deepEqual(parseCloudflareInventory({success:true,errors:[],result}),items);
+  }
+  assert.deepEqual(parseCloudflareInventory({success:true,result:{response:{items:[]}}}),[]);
+  for(const response of [null,[],{items:[{name:'Bed',qty:'2',confidence:'high'}]},{items:[{name:'Bed',qty:2}]},{items:[],price:1000},
+    {items:[{name:'Car',qty:1,confidence:'high'}]},{items:[{name:'Bed',qty:1,confidence:'high',note:'x'.repeat(16001)}]}]){
+    assert.throws(()=>parseCloudflareInventory({success:true,result:{response}}),error=>error.code==='invalid_ai_response');
+  }
+});
+
+test('conflicting, partial or multiple JSON blocks are rejected instead of selecting a convenient inventory',()=>{
+  const inventory=JSON.stringify({items});
+  for(const response of [
+    '{"items":[]}\n```json\n'+inventory+'\n```',
+    '```json\n'+inventory+'\n```\n{"items":[]}',
+    inventory+'\nA second inventory starts here: {',
+    '```json\n'+inventory,
+    '```json\n'+inventory+'\n```\n```json\n{"items":[]}',
+    'Inventory: ['+inventory+']',
+    '```json\n'+inventory+'\n'+inventory+'\n```',
+    'Inventory: '+inventory+'\nAnother inventory: {"items":[]}',
+    '```javascript\n'+inventory+'\n```',
+    'Inventory: {"items":[],}',
+  ])assert.throws(()=>parseCloudflareInventory({success:true,result:{response}}),error=>error.code==='invalid_ai_response');
 });
 
 test('multiple sanitized views form one bounded, metadata-free contact sheet; duplicate photos are not summed',async()=>{
@@ -172,11 +233,12 @@ test('Cloudflare output normalizes safe category aliases but never defaults, rou
   ])assert.throws(()=>parseCloudflareInventory(envelope(invalid)),error=>error.code==='invalid_ai_response');
 });
 
-test('malformed envelopes, prose, truncated JSON and oversized text fail closed; empty inventory remains valid',()=>{
+test('malformed envelopes, noninventory prose, truncated JSON and oversized text fail closed; empty inventory remains valid',()=>{
   assert.deepEqual(parseCloudflareInventory(envelope([])),[]);
-  for(const data of [{success:false,errors:[],result:{response:'{"items":[]}'}},{success:true,result:'{"items":[]}'},{success:true,result:{response:{items:[]}}},
+  for(const data of [{success:false,errors:[],result:{response:'{"items":[]}'}},{success:true,result:'{"items":[]}'},{success:true,result:{response:[]}},
+    {success:true,result:{response:{items:[]},items:[]}},
     {...envelope(items),errors:[{message:'private failure'}]},
-    ...['', 'Here is your inventory: {"items":[]}', '{"items":[', '{"items":[],"price":1000}', '[]','x'.repeat(16001)].map(response=>({success:true,result:{response}})),
+    ...['', 'No furniture found.', '{"items":[', '{"items":[],"price":1000}', '[]','x'.repeat(16001)].map(response=>({success:true,result:{response}})),
   ])assert.throws(()=>parseCloudflareInventory(data),error=>error.code==='invalid_ai_response'&&!error.message.includes('private failure'));
 });
 
@@ -219,15 +281,35 @@ test('malformed/non-JSON provider errors and transport failures cannot inject se
     {status:403,code:null,fetchImpl:async()=>Response.json({errors:[{code:cloudToken,message:cloudToken}]},{status:403})},
     {status:403,code:5016,fetchImpl:async()=>Response.json({errors:[{code:'5016',message:cloudToken}]},{status:403})},
     {status:502,code:null,fetchImpl:async()=>new Response(cloudToken,{status:502})},
-    {status:200,code:null,fetchImpl:async()=>Response.json({success:true,result:{response:'{truncated '+cloudToken}})},
+    {status:200,code:null,diagnostics:{stage:'inventory_json',responseShape:{envelope:'object',result:'object',response:'string',items:'undefined'}},fetchImpl:async()=>Response.json({success:true,result:{response:'{truncated '+cloudToken}})},
     {status:null,code:null,fetchImpl:async()=>{throw new Error(cloudToken);}},
   ];
   for(const entry of cases){
     const logs=[];
     await withServer({logScanFailure:record=>logs.push(record),fetchImpl:entry.fetchImpl},async post=>{
       const response=await post();assert.equal(response.status,502);
-      assert.deepEqual(logs,[{httpStatus:entry.status,providerCode:entry.code,requestId:response.headers.get('X-Request-ID')}]);
+      assert.deepEqual(logs,[{httpStatus:entry.status,providerCode:entry.code,requestId:response.headers.get('X-Request-ID'),...entry.diagnostics}]);
       assert.equal((JSON.stringify(logs)+await response.text()).includes(cloudToken),false);
+    });
+  }
+});
+
+test('parser diagnostics identify the exact stage and response types without logging content, dynamic keys or personal data',async()=>{
+  const privateValue=`private ${cloudToken} ${account} ${original}`;
+  const cases=[
+    {stage:'provider_json',shape:null,upstream:()=>new Response(privateValue)},
+    {stage:'provider_envelope',shape:{envelope:'object',result:'string',response:'undefined',items:'undefined'},upstream:()=>Response.json({success:true,result:privateValue})},
+    {stage:'response_shape',shape:{envelope:'object',result:'object',response:'number',items:'undefined'},upstream:()=>Response.json({success:true,result:{response:12,[privateValue]:privateValue}})},
+    {stage:'inventory_json',shape:{envelope:'object',result:'object',response:'string',items:'undefined'},upstream:()=>Response.json({success:true,result:{response:privateValue}})},
+    {stage:'inventory_schema',shape:{envelope:'object',result:'object',response:'object',items:'undefined'},upstream:()=>Response.json({success:true,result:{response:{items:[{name:privateValue,qty:1,confidence:'high'}]}}})},
+  ];
+  for(const entry of cases){
+    const logs=[];
+    await withServer({logScanFailure:record=>logs.push(record),fetchImpl:async()=>entry.upstream()},async post=>{
+      const response=await post();assert.equal(response.status,502);
+      const data=await response.json();assert.equal(data.code,'invalid_ai_response');assert.equal(Object.hasOwn(data,'items'),false);
+      assert.deepEqual(logs,[{httpStatus:200,providerCode:null,requestId:response.headers.get('X-Request-ID'),stage:entry.stage,responseShape:entry.shape}]);
+      for(const secret of [privateValue,cloudToken,account,original])assert.equal(JSON.stringify({data,logs}).includes(secret),false);
     });
   }
 });
