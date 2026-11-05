@@ -76,6 +76,8 @@ with sync_playwright() as playwright:
     renter.get_by_role('button', name='View details', exact=True).click()
     expect(renter.get_by_role('link', name='Call owner', exact=True)).to_be_visible()
     renter.get_by_role('button', name='Plan move here', exact=True).click()
+    renter.get_by_role('button',name='Continue to furniture',exact=True).click()
+    renter.get_by_role('button',name='Continue to estimate',exact=True).click()
     renter.get_by_label('Notes for movers', exact=True).fill('Private local test unit and access notes')
     renter.get_by_label('I agree to share my phone number').check()
     renter.get_by_role('button', name='Publish moving request', exact=True).click()

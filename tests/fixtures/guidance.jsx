@@ -16,7 +16,8 @@ function Harness(){
   const [request,setRequest]=useState({status:'open',offers}),[inventory,setInventory]=useState(move.items),[pending,setPending]=useState(false);
   const ranked=rankApartments(properties,{...preferences,maxBudget:budget});
   return <main className="container"><h1>Test fixtures / পরীক্ষার তথ্য</h1>
-    <ApartmentPreferences value={preferences} onChange={setPreferences} maxRent={budget} onBudgetChange={setBudget}/>
+    <label>Maximum monthly rent<input aria-label="Maximum monthly rent" className="form-control" type="number" value={budget} onChange={event=>setBudget(event.target.value)}/></label>
+    <ApartmentPreferences value={preferences} onChange={setPreferences}/>
     <div aria-label="Ranked apartments">{ranked.map(row=><article key={row.id}><h3>{properties.find(p=>p.id===row.id).title}</h3><ApartmentExplanation recommendation={row}/></article>)}</div>
     {request.status==='open'?<QuoteComparison offers={request.offers} workers={workers} onChoose={id=>setRequest(old=>chooseOffer(old,id))}/>:<p role="status">Selected: {request.selectedOfferId}; statuses: {request.offers.map(o=>o.status).join(',')}</p>}
     <FurnitureRecognition demoMode token={null} onPendingChange={setPending} onApply={setInventory} prepareImage={file=>new Promise(resolve=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.readAsDataURL(file);})}/>

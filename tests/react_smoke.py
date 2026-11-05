@@ -2,6 +2,7 @@
 import argparse
 import os
 from playwright.sync_api import expect, sync_playwright
+from browser_artifacts import capture
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--base-url', default='http://127.0.0.1:8787')
@@ -16,6 +17,8 @@ with sync_playwright() as p:
     )
     context = browser.new_context(viewport={'width': 1440, 'height': 1000})
     page = context.new_page()
+    page.route('https://fonts.googleapis.com/**',lambda route:route.abort())
+    page.route('https://fonts.gstatic.com/**',lambda route:route.abort())
     errors = []
     page.on('pageerror', lambda error: errors.append(str(error)))
     page.set_default_timeout(5000)
@@ -30,6 +33,10 @@ with sync_playwright() as p:
 
     page.goto(args.base_url + ('?demo=1' if args.demo else ''))
     expect(page.locator('.home-card')).to_have_count(6)
+    page.get_by_role('button',name='Show Bangla labels',exact=True).click()
+    expect(page.locator('.top-nav [lang=bn]').first).to_be_visible()
+    page.get_by_role('button',name='Show Bangla labels',exact=True).click()
+    expect(page.locator('.top-nav [lang=bn]').first).not_to_be_visible()
     health = page.request.get(args.base_url + '/api/health')
     assert health.ok and health.json()['ok'] is True
     assert page.locator('.home-card').first.evaluate(
@@ -38,8 +45,9 @@ with sync_playwright() as p:
 
     page.get_by_label('Search homes', exact=True).fill('Bonosree')
     expect(page.locator('.home-card')).to_have_count(2)
-    page.get_by_label('Maximum monthly rent').select_option('20000')
+    page.get_by_label('Maximum monthly rent').fill('20000')
     expect(page.locator('.home-card')).to_have_count(1)
+    capture(page,'home-search-demo')
     page.get_by_role('button', name='Reset', exact=True).click()
 
     navigate('Owner desk')
@@ -48,6 +56,7 @@ with sync_playwright() as p:
     page.get_by_label('Monthly rent (BDT) *', exact=True).fill('18000')
     page.get_by_label('Owner name *', exact=True).fill('Test Owner')
     page.get_by_label('Bangladesh phone *').fill('01712345678')
+    capture(page,'owner-listing-demo')
     page.get_by_role('button', name='Publish property', exact=True).click()
     expect(page.locator('.mini-entry').filter(has_text='Smoke test apartment')).to_have_count(1)
 
@@ -69,6 +78,13 @@ with sync_playwright() as p:
     page.get_by_role('button', name='View details', exact=True).click()
     page.get_by_role('button', name='Plan move here', exact=True).click()
     expect(page.get_by_role('combobox', name='Moving to', exact=True)).to_have_value('Banasree')
+    page.get_by_label('Approx. distance (km)',exact=True).fill('-1')
+    page.get_by_role('button',name='Continue to furniture',exact=True).click()
+    expect(page.locator('.step-nav [aria-current=step]')).to_contain_text('Route & date')
+    assert not page.get_by_label('Approx. distance (km)',exact=True).evaluate('input=>input.checkValidity()')
+    page.get_by_label('Approx. distance (km)',exact=True).fill('5')
+    page.get_by_role('button',name='Continue to furniture',exact=True).click()
+    page.get_by_role('button',name='Continue to estimate',exact=True).click()
     page.get_by_label('Your name *', exact=True).fill('Test Renter')
     page.get_by_label('Phone number *', exact=True).fill('01812345678')
     page.get_by_label('I agree to share my phone number').check()
@@ -101,6 +117,11 @@ with sync_playwright() as p:
     assert db()['requests'][0]['status'] == 'confirmed'
 
     page.set_viewport_size({'width': 390, 'height': 844})
+    page.get_by_role('button',name='Toggle navigation / মেনু',exact=True).click()
+    navigate('Moving services')
+    page.get_by_role('button',name='Continue to furniture',exact=True).click()
+    expect(page.get_by_role('heading',name='Scan furniture with AI',exact=True)).to_be_visible()
+    page.set_viewport_size({'width':360,'height':844})
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), \
         'Horizontal overflow on mobile'
     assert not errors, errors
