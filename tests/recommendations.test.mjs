@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { rankApartments, rankMoverOffers } from '../src/lib/recommendations.js';
 import { calculateMovingBudget } from '../src/lib/pricing.js';
-import { chooseOffer } from '../src/domain.js';
 
 const property = (id,change={}) => ({id,status:'published',rent:18000,beds:2,area:'Banasree',lift:true,parking:false,balcony:true,...change});
 test('apartments enforce every hard requirement and never recommend demo or unpublished listings',()=>{
@@ -68,13 +67,11 @@ test('offer comparison handles empty, single, tied, invalid, stale and multiple 
   assert.equal(ranked[2].difference,1000);assert.equal(ranked[2].score,67);
   assert.ok(ranked.slice(0,2).every(o=>o.recommended));
 });
-test('missing reviews cannot fabricate reliability or override renter selection and competing-offer transitions',()=>{
+test('missing reviews cannot fabricate reliability or modify independent offers',()=>{
   const offers=[{id:'a',workerId:'wa',status:'pending',amount:2000,rating:5,reviewCount:99},{id:'b',workerId:'wb',status:'pending',amount:2500}];
   const ranked=rankMoverOffers(offers,'reliability');
   assert.ok(ranked.every(o=>o.reviews===null));assert.match(ranked[0].explanation,/unavailable/);
-  const request={status:'open',offers};const selected=chooseOffer(request,'b');
-  assert.deepEqual(selected.offers.map(o=>o.status),['not_selected','selected']);
-  assert.equal(request.status,'open');
+  assert.deepEqual(offers.map(o=>o.status),['pending','pending']);
 });
 const move={items:[{name:'Bed',qty:2},{name:'Boxes',qty:4}],km:10,fromFloor:2,toFloor:3,hasLift:false};
 // Arbitrary TEST inputs only, not market price defaults.

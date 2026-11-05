@@ -6,7 +6,7 @@ import { loginAccount, readSupabaseConfig, registerAccount, registrationData, re
 const publicKey = () => 'sb_publishable_'+randomUUID();
 const form = () => ({ email: ' renter@example.test ', password: randomUUID(), role: 'renter', display_name: ' Test Renter ', phone: '018-1234-5678' });
 
-test('missing configuration selects the labeled demo; incomplete configuration fails', () => {
+test('missing configuration leaves accounts unconfigured; incomplete configuration fails', () => {
   assert.equal(readSupabaseConfig({}).configured, false);
   assert.throws(() => readSupabaseConfig({ VITE_SUPABASE_URL: 'https://example.supabase.co' }));
 });
@@ -76,4 +76,21 @@ test('password update validates length and propagates Supabase Auth failures', a
   const successfulClient = { auth:{ updateUser:async value => { updated=value;return { data:{ user:{ id:randomUUID() } }, error:null }; } } };
   await updateAccountPassword(successfulClient, 'long-enough-password');
   assert.deepEqual(updated, { password:'long-enough-password' });
+});
+
+test('production configuration requires a hosted API origin while test/development support a local Supabase API',()=>{
+  assert.throws(()=>readSupabaseConfig({}, {requireHosted:true}),/Production requires/);
+  for(const url of ['http://localhost:54321','https://localhost','https://127.0.0.2','https://[::1]']){
+    assert.throws(()=>readSupabaseConfig({VITE_SUPABASE_URL:url,VITE_SUPABASE_PUBLISHABLE_KEY:publicKey()},{requireHosted:true}),/hosted HTTPS/);
+  }
+  assert.equal(readSupabaseConfig({VITE_SUPABASE_URL:'https://custom-api.example.test',VITE_SUPABASE_PUBLISHABLE_KEY:publicKey()},{requireHosted:true}).configured,true);
+  assert.equal(readSupabaseConfig({VITE_SUPABASE_URL:'http://127.0.0.1:54321',VITE_SUPABASE_PUBLISHABLE_KEY:publicKey()}).configured,true);
+});
+test('dashboard URLs and any VITE provider credential setting are rejected without exposing their values',()=>{
+  for(const url of ['https://supabase.com','https://app.supabase.com'])assert.throws(()=>readSupabaseConfig({VITE_SUPABASE_URL:url,VITE_SUPABASE_PUBLISHABLE_KEY:publicKey()}),/dashboard/);
+  const privateValue='private-test-value-'+randomUUID();
+  for(const key of ['VITE_OPENAI_API_KEY','VITE_BASHASHIFT_OPENAI_KEY','VITE_CLOUDFLARE_AI_TOKEN','VITE_CLOUDFLARE_ACCOUNT_ID']){
+    assert.throws(()=>readSupabaseConfig({[key]:privateValue}),error=>/Server credentials/.test(error.message)&&!error.message.includes(privateValue));
+  }
+  assert.throws(()=>readSupabaseConfig({VITE_SUPABASE_URL:privateValue,VITE_SUPABASE_PUBLISHABLE_KEY:publicKey()}),error=>/project API URL/.test(error.message)&&!error.message.includes(privateValue));
 });

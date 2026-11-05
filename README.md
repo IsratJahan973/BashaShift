@@ -1,128 +1,67 @@
-# BashaShift — Rental-to-Relocation B2C Prototype 🇧🇩
+<h1 align="center">🏡 BashaShift</h1>
 
-**Find a home. Arrange your move. Confirm by phone.**
+<p align="center"><strong>Your Next Home. Your Next Move. Skip the Chaos.</strong></p>
 
-BashaShift connects three roles in a single Bangladesh-specific journey: owner property posting → renter discovery and inquiry → moving inventory and quote request → nearby independent mover offers → customer chooses, calls, and confirms.
+<p align="center">A smarter way to find your next rental, plan your move, and connect with independent movers in Bangladesh.</p>
 
-## Start here
+<p align="center">
+  <a href="https://bashashift.onrender.com/"><img alt="Explore Live App" src="https://img.shields.io/badge/EXPLORE%20LIVE%20APP-21694F?style=for-the-badge"></a>
+  <a href="docs/ACCEPTANCE_QA.md"><img alt="View Test Report" src="https://img.shields.io/badge/VIEW%20QA%20REPORT-305F72?style=for-the-badge"></a>
+</p>
 
-### Option A — dependency-free interactive demo (works offline)
+<p align="center">
+  <img alt="Mobile Friendly" src="https://img.shields.io/badge/Mobile--Friendly-F5F8F2?style=flat-square&labelColor=F5F8F2&color=21694F">
+  <img alt="AI-Assisted Inventory" src="https://img.shields.io/badge/AI--Assisted%20Inventory-F5F8F2?style=flat-square&labelColor=F5F8F2&color=21694F">
+  <img alt="Three Connected Roles" src="https://img.shields.io/badge/3%20Connected%20Roles-F5F8F2?style=flat-square&labelColor=F5F8F2&color=21694F">
+</p>
 
-Open **`standalone-demo.html`** in a modern browser, keeping `src/styles.css` in the same extracted project folder. The offline demo supports rental search and filtering, owner property publishing, viewing inquiries, manual moving inventory and estimates, moving requests, area-matched worker offers, and customer booking confirmation. Records persist in that browser's `localStorage`.
+---
 
-The offline demo deliberately **does not** pretend to run AI. It is not a deployable public marketplace and does not synchronize between browsers.
+## ✨ What is BashaShift?
 
-### Option B — React + API project for development in Codex
+Finding a home is only half the journey. Moving into it means organizing furniture, estimating expenses, and finding reliable help—often through disconnected conversations.
 
-Requires Node.js 22+ (24 recommended) and internet for dependencies.
+**BashaShift brings these steps together:** discover owner-published apartments, arrange viewings, prepare an AI-assisted moving inventory, compare quotes, and confirm a mover—all from one mobile-friendly platform.
 
-```bash
-npm ci
-cp .env.example .env
-# Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY for shared accounts
-# Leave both blank to use the labeled local demo
-npm run dev
-```
+## 🧭 One connected journey
 
-Open `http://localhost:5173`. The `npm run dev` script starts both Vite frontend and Express backend. `npm test` runs domain, Auth/configuration, and embedded PostgreSQL migration/RLS tests. `npm run build` builds production frontend; `npm start` serves built assets with the Node API on port 8787.
+**🏠 Find a home** → **📅 Request a viewing** → **📷 Scan furniture with AI** → **💰 Plan a moving budget** → **🚚 Compare quotes & confirm**
 
-Dependencies are locked in `package-lock.json`. Run `npm test` and `npm run build` after installation. See [`docs/PHASE3_QA.md`](docs/PHASE3_QA.md) for current validation results and [`docs/PHASE2_QA.md`](docs/PHASE2_QA.md) for the database foundation's verification scope.
+| 🏡 Property Owner | 🔑 Renter | 🚚 Moving Service Provider |
+| :--- | :--- | :--- |
+| Publish and manage rental listings | Find homes using simple filters | Discover eligible local moving requests |
+| Add room photos and respond to inquiries | Book viewings and plan relocation | Submit independent price quotations |
+| Manage incoming interest | Review quotes and select a mover | Coordinate confirmed bookings |
 
-## Phase 3: photo-assisted moving inventory
+## 🪄 The AI feature that makes moving easier
 
-Renters can choose furniture photos, explicitly send them for analysis, review and correct suggested quantities, and apply the approved list before publishing a moving request. Manual entry remains available when AI fails or is unconfigured. The BDT estimate now shows furniture handling, vehicle base, distance, stairs, and rounding; it is an illustrative estimate, never a guaranteed moving price.
+**Take a photo → AI suggests furniture → You review the list → Get a planning estimate**
 
-Follow [`docs/AI_SETUP.md`](docs/AI_SETUP.md) for backend-only OpenAI configuration, authenticated access, upload limits, the pricing formula, and the demo workflow. No database migration is needed for Phase 3. `npm run test:browser:ai` verifies the upload-to-request journey with **mocked OpenAI**; real-photo accuracy and hosted shared persistence still require separate verification.
+BashaShift uses **Mistral Small 3.1 Vision via Cloudflare Workers AI** to suggest furniture items and quantities from uploaded photos. Renters can correct every suggestion before applying it, or enter everything manually.
 
-## Supabase accounts and shared rentals
+The **moving-budget range is an illustrative calculation**, not an AI-predicted market price. Apartment suggestions are based on transparent preference matching. **Movers set their own final quotation prices.**
 
-Follow [`docs/SUPABASE_SETUP.md`](docs/SUPABASE_SETUP.md) to create a project, apply the migration, configure email login and public environment variables, and run local integration tests. Owners, renters, and movers have separate account roles. Customer contacts stay private until an authorized selection with consent. Live mode never mixes fictional demo records into the shared database.
+## 🛠️ Built with
 
-The Supabase SDK requires Node 22+. Never use a service-role or secret key in frontend configuration. See [`docs/PHASE2_QA.md`](docs/PHASE2_QA.md) for implemented behavior and the distinction between local and hosted validation.
+<p>
+  <img alt="React" src="https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB">
+  <img alt="Vite" src="https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white">
+  <img alt="Node.js" src="https://img.shields.io/badge/Node.js-43853D?style=flat-square&logo=nodedotjs&logoColor=white">
+  <img alt="Express" src="https://img.shields.io/badge/Express-303030?style=flat-square&logo=express&logoColor=white">
+  <img alt="Supabase" src="https://img.shields.io/badge/Supabase-3ECF8E?style=flat-square&logo=supabase&logoColor=white">
+  <img alt="Cloudflare Workers AI" src="https://img.shields.io/badge/Cloudflare%20Workers%20AI-F38020?style=flat-square&logo=cloudflare&logoColor=white">
+  <img alt="Render" src="https://img.shields.io/badge/Render-171B26?style=flat-square&logo=render&logoColor=white">
+</p>
 
-## Project layout
+React and Vite power the interface; Node.js and Express handle the server; Supabase provides authentication, PostgreSQL, and image storage. Optional road routing is supported when configured.
 
-```text
-src/                 React components, styles, demo data, and domain logic
-server/              Express API, photo validation, renter verification, OpenAI integration
-tests/               Domain tests and optional browser smoke tests
-docs/                Requirements, architecture, handoff, QA, and screenshots
-.env.example         Public Supabase configuration + server-only environment template
-index.html           Vite frontend entry
-standalone-demo.html Offline demo using src/styles.css
-standalone-selfcontained.html  Offline demo with embedded styles
-```
+## ✅ Built and tested
 
-Run Node commands from the repository root. The source files live in these tracked directories; no copied directory overlays are needed.
+**121 automated tests passed** in the latest reported development suite, including isolated scenarios with **3 renters, 1 owner and 3 moving providers**. The automated browser tests mock external service responses; **real furniture recognition was separately demonstrated on the live app**.
 
-## Browser smoke tests
+> **Prototype notice:** Property listings and mover identities are user-provided and not independently verified. Estimates are illustrative, and no online payments are collected.
 
-The optional browser tests require Python 3, Playwright, and Chromium:
+---
 
-```bash
-python3 -m pip install -r tests/requirements.txt
-python3 -m playwright install chromium
-python3 tests/offline_smoke.py
-
-# Start the production app in another terminal first:
-npm run build
-npm start
-# Then run:
-python3 tests/react_smoke.py
-```
-
-For an existing Chromium installation, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to its executable instead of downloading a browser. The offline test starts and stops its own local HTTP server and tests both demo files. The React test uses a running app on port 8787 by default; pass `--base-url http://127.0.0.1:5173` to test `npm run dev` instead. Both tests use isolated browser contexts and real `localStorage`; they do not change your normal browser data or make phone calls.
-
-## What exists now
-
-Supabase behavior below is implemented in code; hosted Auth/Storage and the full multi-account live journey still require a configured project and integration verification. See `docs/PHASE2_QA.md`.
-
-| Feature | React starter | Offline demo |
-|---|---|---|
-| Property search and filters | Shared Supabase records when configured; separate demo | Implemented (browser-local) |
-| Owner publish property + photo | Owner-scoped database + private photo storage integration | Implemented (browser-local) |
-| Owner/tenant viewing inquiry | Shared inquiries restricted to renter/property owner | Implemented (browser-local) |
-| Manual moving inventory / indicative price | Implemented | Implemented |
-| Location-matched worker job feed | Database area/availability matching; private contact excluded | Implemented (area match) |
-| Accept or counteroffer | Database-backed authorized offers | Implemented |
-| Customer chooses worker, phone confirm | Transactional selection/reopen/confirmation; self-reported call | Implemented workflow |
-| AI photo furniture recognition | Photo upload, editable review, safe manual fallback; mocked workflow tested, **real API untested** | Not supported; truthfully disclosed |
-| Real accounts and multi-device shared database | Supabase integration; project setup required | Not supported |
-| Identity verification and payments | **Not implemented**; Phase 2 RLS is not a full production security audit | **Not implemented** |
-| Mandatory official sticker graphic | **Not included**. Visible text placeholder only. | Same |
-
-### Safety and honest presentation
-
-- Sample rental listings and sample workers are fictional. Do not describe them as active inventory or service providers.
-- Demo prices are **illustrative formula outputs**, not verified moving-market prices.
-- New listings and worker profiles in this prototype are **unverified**.
-- The demonstration stores phone numbers in local browser storage: use test numbers or controlled demo data until proper authentication and server-side access rules exist. Never publish someone else's phone number without consent.
-- A phone call must happen *before* a customer marks a job confirmed. Workers must not see customers' phone numbers merely by receiving a broadcast; a renter shares contact after selecting a worker.
-- A real AI scan requires `OPENAI_API_KEY` set server-side. Do **not** fake AI detections or upload private photos without clear consent.
-
-## Technology stack
-
-- Frontend: React 19, Vite, CSS (no full UI library), Lucide icons.
-- API: Node.js + Express, server-side OpenAI Responses API for optional furniture identification.
-- Shared mode: Supabase Auth, Postgres, private photo storage, and database-enforced access policies.
-- Demo mode: separate, clearly labeled `localStorage` data.
-- Phase 3 adds reviewed AI inventory and itemized estimates; payments remain outside scope.
-- Deployment once database/auth are complete: a Node-hosted web service (e.g. Render) can run `npm run build` then `npm start` with the server-side API secret. Static-only hosting cannot run this Express API without a separate backend.
-
-## Project handoff documents
-
-1. [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) — complete functional and nonfunctional requirements with completion status.
-2. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — domain entities, privacy rules, business logic, and stack choices.
-3. [`docs/CODEX_HANDOFF.md`](docs/CODEX_HANDOFF.md) — ordered Codex prompts and test gates.
-4. [`docs/JUDGE_REVIEW.md`](docs/JUDGE_REVIEW.md) — strict competition review, current weaknesses and realistic upside.
-5. [`docs/SUBMISSION.md`](docs/SUBMISSION.md) — judges' demo script, five-slide outline, and official compliance checklist.
-
-## Suggested 90-second judge journey
-
-1. Search “Banasree” and narrow the rent budget.
-2. Open a property; show availability and send a viewing inquiry.
-3. Move directly from property details to a prefilled moving request.
-4. Add furniture or trigger **real** AI photo analysis (when configured); review and correct inventory.
-5. Switch to mover account in the demo, send a quote, return to customer view, choose worker, call to confirm, and show booking status.
-
-**Positioning:** Not “Bangladesh's first rental site.” Pitch it as a **rental-to-relocation workflow with transparent mover quotes and phone-confirmed service coordination**, designed for the local market.
+<p align="center"><strong>Built by Israt Jahan</strong><br>Department of Computer Science and Engineering · East West University, Bangladesh</p>
+<p align="center"><a href="https://bashashift.onrender.com/"><strong>🌐 Try BashaShift</strong></a></p>

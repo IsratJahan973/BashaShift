@@ -46,19 +46,34 @@ export async function validatePhotos(body){
   return [...new Set(safe)];
 }
 
+const aliases=new Map(Object.entries({
+  bed:'Bed',beds:'Bed',sofa:'Sofa',sofas:'Sofa',couch:'Sofa',couches:'Sofa',
+  refrigerator:'Refrigerator',refrigerators:'Refrigerator',fridge:'Refrigerator',fridges:'Refrigerator',
+  wardrobe:'Wardrobe',wardrobes:'Wardrobe','dining table':'Dining table','dining tables':'Dining table',
+  'washing machine':'Washing machine','washing machines':'Washing machine',box:'Boxes',boxes:'Boxes',
+  'moving box':'Boxes','moving boxes':'Boxes',other:'Other',
+}));
+
+export function parseInventoryItems(parsed,{normalizeNames=false}={}){
+  try{
+    if(!parsed || Object.keys(parsed).join(',')!=='items' || !Array.isArray(parsed.items) || parsed.items.length>categories.length)throw new Error('Invalid inventory');
+    const seen=new Set();
+    return parsed.items.map(item=>{
+      const name=normalizeNames&&typeof item?.name==='string'
+        ?aliases.get(item.name.trim().toLowerCase().replace(/[_-]+/g,' ').replace(/\s+/g,' ')):item?.name;
+      if(!item || Object.keys(item).sort().join(',')!=='confidence,name,qty' || !categories.includes(name)
+        || !Number.isInteger(item.qty) || item.qty<1 || item.qty>100 || !confidence.includes(item.confidence) || seen.has(name))throw new Error('Invalid item');
+      seen.add(name);
+      return {name,qty:item.qty,confidence:item.confidence};
+    });
+  }catch{throw new ScanError(502,'invalid_ai_response','The photo analysis could not be read. Retry or enter items manually.');}
+}
+
 export function parseInventory(response){
   try{
     if(response.status && response.status!=='completed')throw new Error('Incomplete');
     const output=response.output?.flatMap(item=>item.content||[]).filter(item=>item.type==='output_text').map(item=>item.text).join('');
-    const parsed=JSON.parse(output);
-    if(!parsed || Object.keys(parsed).join(',')!=='items' || !Array.isArray(parsed.items) || parsed.items.length>categories.length)throw new Error('Invalid inventory');
-    const seen=new Set();
-    for(const item of parsed.items){
-      if(!item || Object.keys(item).sort().join(',')!=='confidence,name,qty' || !categories.includes(item.name)
-        || !Number.isInteger(item.qty) || item.qty<1 || item.qty>100 || !confidence.includes(item.confidence) || seen.has(item.name))throw new Error('Invalid item');
-      seen.add(item.name);
-    }
-    return parsed.items;
+    return parseInventoryItems(JSON.parse(output));
   }catch{throw new ScanError(502,'invalid_ai_response','The photo analysis could not be read. Retry or enter items manually.');}
 }
 

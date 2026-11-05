@@ -2,28 +2,34 @@ import { useState } from 'react';
 import { calculateMovingBudget, effortUnits } from '../lib/pricing.js';
 import { money } from '../domain.js';
 
-const fields = [
-  ['base','Base / প্রাথমিক খরচ (BDT)',0,100000],
-  ['perKm','Per km / প্রতি কিমি (BDT)',0,100000],
-  ['perUnit','Per effort unit / শ্রম একক (BDT)',0,100000],
-  ['perFloorUnit','Per stair-floor × effort unit / সিঁড়ি একক (BDT)',0,100000],
-  ['workload','Workload multiplier / শ্রমের গুণক',0.5,3],
-  ['margin','Range ± % / সীমা',1,80],
+// Invented planning assumptions only. Independent movers still choose their own quotation.
+const illustrativeAssumptions={base:850,perKm:45,perUnit:150,perFloorUnit:20,workload:1,margin:20};
+const fields=[
+  ['base','Base (BDT)',0,100000],['perKm','Per km (BDT)',0,100000],
+  ['perUnit','Per effort unit (BDT)',0,100000],['perFloorUnit','Per stair-floor × unit (BDT)',0,100000],
+  ['workload','Workload multiplier',0.5,3],['margin','Range ± %',1,80],
 ];
-export default function MovingBudget({ move, pending = false, mover = false }) {
-  const [assumptions,setAssumptions] = useState({base:'',perKm:'',perUnit:'',perFloorUnit:'',workload:1,margin:20});
-  const budget = calculateMovingBudget(move,assumptions);
-  return <section className="guidance-panel" aria-label={mover?'Mover pricing assistant':'Illustrative moving budget'}>
-    <h4>{mover?'Optional pricing helper / ঐচ্ছিক দর সহায়তা':'Illustrative moving budget / আনুমানিক মুভিং বাজেট'}</h4>
-    <p className="small">{move.items.reduce((sum,i)=>sum+Number(i.qty||0),0)} items /টি · {move.km} km · Floors / তলা {move.fromFloor} → {move.toFloor} · {move.hasLift?'Lift at both ends assumed / দুই বাসায় লিফট ধরা হয়েছে':'No lift at either end / দুই বাসায় লিফট নেই'}</p>
-    <p className="small muted">Enter your own cost assumptions below. No verified market rates. / নিজের খরচের ধারণা দিন; এগুলো যাচাইকৃত বাজারদর নয়।</p>
-    <details><summary>Cost assumptions & formula / খরচের হিসাব</summary>
-      <div className="guidance-fields">{fields.map(([key,label,min,max])=><label className="field" key={key}><span>{label}</span><input className="form-control" aria-label={label} type="number" min={min} max={max} step={key==='workload'?'0.1':'1'} value={assumptions[key]} onChange={e=>setAssumptions(old=>({...old,[key]:e.target.value}))}/></label>)}</div>
-      <p className="small">Base + km × per-km + effort units × workload × (handling rate + stair floors × stair rate). Range = total ± selected %. / মোটের উপর আপনার দেওয়া সীমা।</p>
-      <p className="small">Planning units / শ্রম একক: {Object.entries(effortUnits).map(([name,units])=>`${name} ${units}`).join(' · ')}. These are rough effort assumptions, not weight measurements. / এগুলো ওজনের মাপ নয়।</p>
-      <p className="small">Ground floor = 0. Working lifts remove stair effort. Both ends use the request’s lift setting. Workload 1 = ordinary access; increase for packing, disassembly or narrow access. Parking, tolls, tax and special handling are excluded unless included in your assumptions. / অতিরিক্ত সেবা আলাদা করে আলোচনা করুন।</p>
+export default function MovingBudget({move,pending=false,mover=false}) {
+  const [assumptions,setAssumptions]=useState(()=>({...illustrativeAssumptions}));
+  const budget=calculateMovingBudget(move,assumptions);
+  const content=<>
+    <p className="small muted">{move.items.reduce((sum,item)=>sum+Number(item.qty||0),0)} items · {move.km} km · Floors {move.fromFloor} → {move.toFloor} · {move.hasLift?'Lift at both ends':'Stairs'}</p>
+    {pending?<p role="status" className="budget-pending">Review or discard photo suggestions to update the range.</p>:budget?<div role="status" className="budget-result">
+      <strong className="budget-range">{money(budget.low)}–{money(budget.high)}</strong><span>Illustrative estimate — not a mover quotation</span>
+    </div>:<p role="status" className="small">Add furniture and valid distance/floors to see a range. Check any edited assumptions.</p>}
+    <p className="small budget-disclosure">Editable example assumptions, not verified Bangladeshi market rates. Movers set their own final price.</p>
+    <details className="budget-calculation"><summary>How calculated · Edit assumptions</summary>
+      <div className="guidance-fields">{fields.map(([key,label,min,max])=><label className="field" key={key}><span>{label}</span>
+        <input className="form-control" aria-label={label} type="number" min={min} max={max} step={key==='workload'?'0.1':'1'} value={assumptions[key]}
+          onChange={event=>setAssumptions(old=>({...old,[key]:event.target.value}))}/></label>)}</div>
+      <p className="small">Base + distance × per-km + effort units × workload × (handling rate + stair floors × stair rate). Range = total ± {assumptions.margin}%.</p>
+      {budget&&<p className="small">Base {money(budget.parts.base)} + distance {money(budget.parts.distance)} + handling {money(budget.parts.handling)} + stairs {money(budget.parts.stairs)}.</p>}
+      <p className="small">Effort units: {Object.entries(effortUnits).map(([name,units])=>`${name} ${units}`).join(' · ')}. These are planning units, not measured weights.</p>
+      <p className="small">Ground floor = 0. The request’s lift setting applies at both ends. Workload 1 assumes ordinary access; adjust for packing or narrow stairs. Tolls, tax and special handling are excluded unless included in your assumptions.</p>
     </details>
-    {pending?<p role="status">Review or discard photo suggestions first / আগে ছবি থেকে পাওয়া তালিকা যাচাই করুন।</p>:budget?<div role="status"><strong>{money(budget.low)}–{money(budget.high)} · Illustrative / শুধু ধারণা</strong><p className="small">{budget.units} effort units · {budget.stairs} stair floors · Base {money(budget.parts.base)} + distance {money(budget.parts.distance)} + handling {money(budget.parts.handling)} + stairs {money(budget.parts.stairs)}</p></div>:<p role="status" className="small">Add inventory and complete valid cost assumptions to see a range. / তালিকা ও খরচের ধারণা পূরণ করুন।</p>}
-    <p className="small muted">Guidance only, never a guaranteed quotation. Movers set their own final price. / নিশ্চয়তা নয়; মুভার নিজের চূড়ান্ত দর দেবেন। {mover?'Your quotation is never filled or changed automatically. / আপনার দর স্বয়ংক্রিয়ভাবে বদলাবে না।':''}</p>
+    {mover&&<p className="small">Your quotation stays under your control; this helper never fills or changes it.</p>}
+  </>;
+  return <section data-planning-only className={`guidance-panel moving-budget ${mover?'mover-budget':''}`} aria-label={mover?'Mover pricing assistant':'Illustrative moving budget'}>
+    {mover?<details><summary>Optional pricing helper <small lang="bn">দর হিসাব</small></summary>{content}</details>:<><span className="eyebrow">PLANNING ESTIMATE</span><h4>Your moving budget <small lang="bn">আনুমানিক খরচ</small></h4>{content}</>}
   </section>;
 }

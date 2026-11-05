@@ -41,16 +41,16 @@ export function useAuth(client) {
   return { session, profile, loading, error, refreshProfile };
 }
 
-export function useCloudData(client, profile, enabled, identity) {
+export function useCloudData(client, profile, identity) {
   const [snapshot, setSnapshot] = useState({ scope: null, data: emptyDatabase() });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const scope = enabled ? identity || 'public' : 'disabled';
+  const scope = identity || 'public';
   const generation = useRef(0);
   const currentScope = useRef(scope);
   currentScope.current = scope;
   const refresh = useCallback(async () => {
-    if (!enabled || !client || currentScope.current !== scope) return;
+    if (!client || currentScope.current !== scope) return;
     const request = ++generation.current;
     setLoading(true);
     try {
@@ -58,18 +58,18 @@ export function useCloudData(client, profile, enabled, identity) {
       if (request === generation.current && currentScope.current === scope) { setSnapshot({ scope, data }); setError(''); }
     } catch (failure) { if (request === generation.current && currentScope.current === scope) setError('Shared data could not be loaded. '+failure.message); }
     finally { if (request === generation.current && currentScope.current === scope) setLoading(false); }
-  }, [client, profile, enabled, scope]);
+  }, [client, profile, scope]);
   useEffect(() => {
     setSnapshot({ scope, data: emptyDatabase() });
     setError('');
     refresh();
-    if (!enabled || !client) return;
+    if (!client) return;
     const timer = window.setInterval(refresh, 15000);
     window.addEventListener('focus', refresh);
     const channel = client.channel('property-feed-'+scope)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'properties' }, refresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'property_images' }, refresh).subscribe();
     return () => { generation.current++; window.clearInterval(timer); window.removeEventListener('focus', refresh); client.removeChannel(channel); };
-  }, [client, scope, enabled, refresh]);
+  }, [client, scope, refresh]);
   return { data: snapshot.scope === scope ? snapshot.data : emptyDatabase(), error, loading, refresh };
 }

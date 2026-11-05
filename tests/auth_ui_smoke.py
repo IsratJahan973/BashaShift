@@ -12,10 +12,13 @@ import time
 from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 from playwright.sync_api import expect, sync_playwright
+from browser_artifacts import capture
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--app-dir', required=True)
 args = parser.parse_args()
+# Auth callbacks cross SDK/session and React updates; keep assertions bounded together.
+expect.set_options(timeout=15000)
 
 
 @contextmanager
@@ -35,7 +38,7 @@ with app_server() as base_url, sync_playwright() as p:
     for role, workspace in [('owner', 'Owner desk'), ('renter', 'Moving services'), ('mover', 'Mover desk')]:
         context = browser.new_context(viewport={'width':1440,'height':1000})
         page = context.new_page()
-        page.set_default_timeout(8000)
+        page.set_default_timeout(15000)
         errors = []
         page.on('pageerror', lambda error: errors.append(str(error)))
         uid = str(uuid4())
@@ -48,6 +51,11 @@ with app_server() as base_url, sync_playwright() as p:
         signup_roles = []
         recovery_requests = []
         password_updates = []
+        auth_state={'signed_in':False}
+        scan_requests=[]
+        property_fixture={'id':str(uuid4()),'owner_id':str(uuid4()),'owner_name':'Fixture owner','title':'Browser test apartment (synthetic)',
+            'status':'published','is_demo':False,'rent':19000,'beds':2,'baths':1,'sqft':1100,'floor':3,'lift':True,'parking':False,'balcony':True,
+            'area':' bAnAsReE ','block':'Test Block','available':'2026-11-15','description':'Synthetic browser fixture','property_images':[]}
 
         def respond(route, body, status=200):
             route.fulfill(status=status, content_type='application/json', body=json.dumps(body), headers={
@@ -67,6 +75,7 @@ with app_server() as base_url, sync_playwright() as p:
                 if request.post_data_json['email'] != email:
                     respond(route, {'error':'invalid_grant','error_description':'Invalid login credentials'}, 400)
                 else:
+                    auth_state['signed_in']=True
                     respond(route, {'access_token':token,'refresh_token':secrets.token_urlsafe(32),'expires_in':3600,'token_type':'bearer','user':user})
             elif '/auth/v1/user' in request.url:
                 if request.method == 'PUT':
@@ -76,7 +85,10 @@ with app_server() as base_url, sync_playwright() as p:
                 recovery_requests.append({'url':request.url,'body':request.post_data_json})
                 respond(route, {})
             elif '/auth/v1/logout' in request.url:
+                auth_state['signed_in']=False
                 respond(route, {})
+            elif '/rest/v1/properties' in request.url:
+                respond(route,[property_fixture])
             elif '/rest/v1/profiles' in request.url:
                 respond(route, profile)
             elif '/rest/v1/rpc/mover_summaries' in request.url:
@@ -85,8 +97,15 @@ with app_server() as base_url, sync_playwright() as p:
                 respond(route, [])
 
         page.route('http://127.0.0.1:54329/**', api)
-        page.goto(base_url)
-        expect(page.locator('.home-card')).to_have_count(0)
+        page.route('https://fonts.googleapis.com/**', lambda route: route.abort())
+        page.route('https://fonts.gstatic.com/**', lambda route: route.abort())
+        page.goto(base_url+'?demo=1', wait_until='domcontentloaded')
+        expect(page.locator('.home-card')).to_have_count(1)
+        assert 'demo=' not in page.url
+        expect(page.get_by_text('Exact preference match',exact=True)).to_have_count(0)
+        page.get_by_role('button',name='Plan a move',exact=True).click()
+        expect(page.get_by_role('heading',name='Renter / ভাড়াটিয়া account required')).to_be_visible()
+        page.get_by_role('button',name='BashaShift home',exact=True).click()
         page.get_by_role('button', name='Sign in', exact=True).click()
         dialog = page.get_by_role('dialog', name='Account access')
         dialog.get_by_role('button', name='New here? Create an account', exact=True).click()
@@ -116,21 +135,76 @@ with app_server() as base_url, sync_playwright() as p:
         dialog.get_by_role('button', name='Sign in', exact=True).click()
         dialog.wait_for(state='hidden')
         page.get_by_role('button', name='Sign out', exact=True).wait_for()
+        dashboard_titles={'owner':'Property Owner Dashboard','renter':'Renter Dashboard','mover':'Moving Service Provider Dashboard'}
+        dashboard_descriptions={'owner':'Manage listings and viewing inquiries','renter':'Find homes, plan moves, track requests','mover':'Find jobs, submit quotes, manage bookings'}
+        expect(page.get_by_role('heading',name=dashboard_titles[role],exact=True)).to_be_visible()
+        expect(page.get_by_text(dashboard_descriptions[role],exact=True)).to_be_visible()
         page.get_by_role('navigation', name='Main navigation').get_by_role('button', name=workspace, exact=True).click()
         if role == 'owner':
             expect(page.get_by_label('Owner name *', exact=True)).to_have_value(profile['display_name'])
         elif role == 'renter':
+            # Authenticated UI journey; both Auth and the provider endpoint are HTTP fixtures.
+            page.get_by_role('navigation',name='Main navigation').get_by_role('button',name='Explore homes',exact=True).click()
+            expect(page.locator('.home-card')).to_have_count(1)
+            expect(page.locator('.match-reasons li')).to_have_count(0)
+            expect(page.get_by_label('Maximum monthly rent',exact=True)).to_have_count(1)
+            page.get_by_label('Area',exact=True).select_option('Banasree')
+            expect(page.locator('.home-card')).to_have_count(1)
+            page.get_by_label('Maximum monthly rent',exact=True).fill('20000')
+            expect(page.get_by_text('Matches your filters',exact=True)).to_be_visible()
+            expect(page.get_by_text('Preference/value score:',exact=False)).not_to_be_visible()
+            page.get_by_text('More preferences',exact=False).click()
+            page.get_by_label('Lift / লিফট required',exact=True).check()
+            page.get_by_label('Preferred area',exact=True).select_option('Mirpur')
+            expect(page.get_by_text('Partial preference match',exact=True)).to_be_visible()
+            expect(page.locator('.home-card')).to_have_count(1)
+            page.get_by_label('Preferred area',exact=True).select_option('Banasree')
+            expect(page.get_by_text('Exact preference match',exact=True)).to_be_visible()
+            page.get_by_text('More preferences',exact=False).click()
+            capture(page,'home-search-auth-mocked')
+            page.get_by_role('navigation',name='Main navigation').get_by_role('button',name='Moving services',exact=True).click()
+            expect(page.locator('.budget-range')).to_have_count(0)
+            page.get_by_label('Approx. distance (km)',exact=True).fill('5')
+            page.get_by_role('button',name='Continue to furniture',exact=True).click()
+            def scan(route):
+                assert route.request.headers.get('authorization')=='Bearer '+token
+                assert 'x-bashashift-demo' not in route.request.headers
+                body=route.request.post_data_json
+                assert body['consent'] is True and len(body['images'])==1
+                scan_requests.append(True)
+                respond(route,{'source':'cloudflare','model':'@cf/mistralai/mistral-small-3.1-24b-instruct','reviewRequired':True,'items':[
+                    {'name':'Bed','qty':2,'confidence':'high'},{'name':'Boxes','qty':4,'confidence':'medium'}]})
+            page.route('**/api/scan',scan)
+            initial=page.locator('.inventory-list').inner_text()
+            page.get_by_label('Furniture photos',exact=True).set_input_files('docs/prototype-desktop.png')
+            expect(page.get_by_role('button',name='Analyze photos',exact=True)).to_be_disabled()
+            page.get_by_label('I have permission to send these photos').check()
+            page.get_by_role('button',name='Analyze photos',exact=True).click()
+            expect(page.locator('.scan-review-row')).to_have_count(2)
+            assert page.locator('.inventory-list').inner_text()==initial
+            expect(page.get_by_role('button',name='Continue to estimate',exact=True)).to_be_disabled()
+            capture(page,'ai-review-auth-mocked')
+            page.get_by_label('Detected Bed quantity',exact=True).fill('3')
+            page.get_by_role('button',name='Apply reviewed inventory',exact=True).click()
+            expect(page.locator('.budget-range')).to_have_text('৳2,420–৳3,630')
+            assert page.locator('.budget-range').inner_text()
+            page.get_by_role('button',name='Continue to estimate',exact=True).click()
             expect(page.get_by_label('Your name *', exact=True)).to_have_value(profile['display_name'])
+            assert scan_requests==[True]
+            capture(page,'moving-estimate-auth-mocked')
         else:
+            page.get_by_text('Profile & service area · আপনার তথ্য',exact=True).click()
             expect(page.get_by_role('button', name='Save mover profile', exact=True)).to_be_visible()
             assert page.get_by_text('Choose demo worker / registered worker', exact=True).count() == 0
         assert page.evaluate("localStorage.getItem('bashashift-prototype-v1')") is None
-        page.set_viewport_size({'width':390,'height':844})
-        assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'Mobile overflow'
+        capture(page,role+'-authenticated-mocked')
+        for width in [360,390]:
+            page.set_viewport_size({'width':width,'height':844})
+            assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'Mobile overflow'
         page.get_by_role('button', name='Sign out', exact=True).click()
         page.get_by_role('button', name='Sign in', exact=True).wait_for()
         recovery_token = secrets.token_urlsafe(32)
-        page.goto(f'{base_url}/?callback=1#access_token={token}&refresh_token={recovery_token}&expires_in=3600&token_type=bearer&type=recovery')
+        page.goto(f'{base_url}/?callback=1#access_token={token}&refresh_token={recovery_token}&expires_in=3600&token_type=bearer&type=recovery', wait_until='domcontentloaded')
         dialog = page.get_by_role('dialog', name='Account access')
         expect(dialog.get_by_role('heading', name='Choose a new password')).to_be_visible()
         dialog.get_by_label('Password', exact=True).fill('a-new-secure-password')

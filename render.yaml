@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: bashashift
+    runtime: node
+    region: singapore
+    plan: free
+    numInstances: 1
+    branch: feat/production-release
+    rootDir: .
+    autoDeployTrigger: "off"
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: CLOUDFLARE_ACCOUNT_ID
+        sync: false
+      - key: CLOUDFLARE_AI_TOKEN
+        sync: false
+      - key: CLOUDFLARE_VISION_MODEL
+        value: "@cf/mistralai/mistral-small-3.1-24b-instruct"
+      - key: AI_ENABLE_OPENAI_FALLBACK
+        value: "false"
+      - key: OPENAI_MODEL
+        value: gpt-4.1-mini
+      # Optional; leave unset until an authenticated HeiGIT route is verified.
+      - key: HEIGIT_API_KEY
+        sync: false

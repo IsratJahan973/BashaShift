@@ -1,10 +1,13 @@
 import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
+import {randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {EnvHttpProxyAgent,fetch as proxyFetch} from 'undici';
-import {ScanError,recognizeFurniture,validatePhotos} from './ai.mjs';
+import {ScanError,validatePhotos} from './ai.mjs';
 import {createRenterVerifier} from './scan-auth.mjs';
+import {createFurnitureRecognizer} from './scan-provider.mjs';
+import {createDrivingRouter} from './routes.mjs';
 
 const proxyAgent=new EnvHttpProxyAgent();
 const outboundFetch=(url,init)=>proxyFetch(url,{...init,dispatcher:proxyAgent});
@@ -20,32 +23,48 @@ function windowLimit(max,windowMs,clock){
   };
 }
 export function createApp({env=process.env,fetchImpl=outboundFetch,verifyRenter=createRenterVerifier(env,fetchImpl),
-  timeoutMs=25000,scanLimit=5,concurrencyLimit=2,clock=Date.now,
+  timeoutMs=25000,routeTimeoutMs=8000,scanLimit=5,routeLimit=12,concurrencyLimit=2,clock=Date.now,logScanFailure,
   dist=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../dist')}={}){
   const app=express();app.disable('x-powered-by');
+  // Render terminates the public connection at one ingress proxy. Trust only that hop.
+  app.set('trust proxy',env.RENDER==='true'?1:false);
+  app.use((_req,res,next)=>{res.set('X-Content-Type-Options','nosniff');next();});
   app.use('/api',(_req,res,next)=>{res.set('Cache-Control','no-store');next();});
-  const key=env.OPENAI_API_KEY||env.BASHASHIFT_OPENAI_API_KEY;
-  const model=env.OPENAI_MODEL||'gpt-4.1-mini';
-  const demoAllowed=env.AI_ALLOW_DEMO_SCAN==='true'&&env.NODE_ENV==='development';
+  const recognizer=createFurnitureRecognizer({env,fetchImpl,timeoutMs,logScanFailure});
   const attempts=windowLimit(40,60000,clock),scans=windowLimit(scanLimit,60000,clock);
   let active=0;
-  app.get('/api/health',(_req,res)=>res.json({ok:true,aiConfigured:Boolean(key),aiRequiresRenterLogin:!demoAllowed,aiDemoEnabled:demoAllowed}));
-  app.post('/api/scan',async(req,res,next)=>{
+  app.get('/api/health',(_req,res)=>res.json({ok:true,aiConfigured:recognizer.configured,aiRequiresRenterLogin:true}));
+  const drivingRoute=createDrivingRouter({env,fetchImpl,clock,timeoutMs:routeTimeoutMs});
+  const routeAttempts=windowLimit(40,60000,clock),routeCalls=windowLimit(routeLimit,60000,clock);
+  app.get('/api/route',async(req,res,next)=>{
+    res.set('X-Request-ID',randomUUID());
     try{
-      if(!key)throw new ScanError(503,'ai_not_configured','AI photo analysis is not configured here. Add items manually.');
+      const retry=routeAttempts(req.ip);
+      if(retry){res.set('Retry-After',String(retry));throw new ScanError(429,'rate_limited','Too many route attempts. Enter distance manually or retry later.');}
+      const bearer=req.get('Authorization')?.match(/^Bearer ([A-Za-z0-9._~+/-]+=*)$/);
+      if(!bearer||bearer[1].length>8192)throw new ScanError(401,'sign_in_required','Sign in as a renter to calculate driving distance.');
+      if(!verifyRenter)throw new ScanError(503,'account_service_unavailable','Account verification is unavailable. Enter distance manually.');
+      const actor=await verifyRenter(bearer[1]);
+      if(actor?.role!=='renter'||!actor.id)throw new ScanError(403,'renter_required','A renter account is required.');
+      const limited=routeCalls(actor.id);
+      if(limited){res.set('Retry-After',String(limited));throw new ScanError(429,'rate_limited','Route limit reached. Enter distance manually or retry later.');}
+      if(Object.keys(req.query).some(key=>!['from','to'].includes(key)))throw new ScanError(400,'invalid_area','Use area names only.');
+      res.json(await drivingRoute(req.query.from,req.query.to));
+    }catch(error){next(error instanceof ScanError?error:new ScanError(503,'route_unavailable','Driving distance is unavailable. Enter distance manually.'));}
+  });
+  app.post('/api/scan',async(req,res,next)=>{
+    req.scanRequestId=randomUUID();res.set('X-Request-ID',req.scanRequestId);
+    try{
+      if(!recognizer.configured)throw new ScanError(503,'ai_not_configured','AI photo analysis is not configured here. Add items manually.');
       const retry=attempts(req.ip);
       if(retry){res.set('Retry-After',String(retry));throw new ScanError(429,'rate_limited','Too many attempts. Wait a minute or enter items manually.');}
-      const loopback=['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
-      if(demoAllowed&&loopback&&req.get('X-BashaShift-Demo')==='1')req.scanActor='demo:'+req.ip;
-      else{
-        const bearer=req.get('Authorization')?.match(/^Bearer ([A-Za-z0-9._~+/-]+=*)$/);
-        if(!bearer||bearer[1].length>8192)throw new ScanError(401,'sign_in_required','Sign in as a renter to analyze furniture photos.');
-        if(!verifyRenter)throw new ScanError(503,'account_service_unavailable','Account verification is unavailable. Manual inventory is still available.');
-        let actor;
-        try{actor=await verifyRenter(bearer[1]);}catch(error){if(error instanceof ScanError)throw error;throw new ScanError(503,'account_service_unavailable','Account verification is unavailable. Try again or enter items manually.');}
-        if(actor?.role!=='renter'||!actor.id)throw new ScanError(403,'renter_required','Photo analysis requires a renter account.');
-        req.scanActor=actor.id;
-      }
+      const bearer=req.get('Authorization')?.match(/^Bearer ([A-Za-z0-9._~+/-]+=*)$/);
+      if(!bearer||bearer[1].length>8192)throw new ScanError(401,'sign_in_required','Sign in as a renter to analyze furniture photos.');
+      if(!verifyRenter)throw new ScanError(503,'account_service_unavailable','Account verification is unavailable. Manual inventory is still available.');
+      let actor;
+      try{actor=await verifyRenter(bearer[1]);}catch(error){if(error instanceof ScanError)throw error;throw new ScanError(503,'account_service_unavailable','Account verification is unavailable. Try again or enter items manually.');}
+      if(actor?.role!=='renter'||!actor.id)throw new ScanError(403,'renter_required','Photo analysis requires a renter account.');
+      req.scanActor=actor.id;
       next();
     }catch(error){next(error);}
   },express.json({limit:'9mb',strict:true}),async(req,res,next)=>{
@@ -57,7 +76,7 @@ export function createApp({env=process.env,fetchImpl=outboundFetch,verifyRenter=
     const disconnected=()=>{if(!res.writableEnded)controller.abort();};res.on('close',disconnected);
     try{
       const images=await validatePhotos(req.body);
-      const data=await recognizeFurniture({images,key,model,fetchImpl,timeoutMs,signal:controller.signal});
+      const data=await recognizer.recognize({images,signal:controller.signal,requestId:req.scanRequestId});
       if(!res.destroyed)res.json(data);
     }catch(error){if(!res.destroyed)next(error);}
     finally{active--;res.off('close',disconnected);}
@@ -70,6 +89,19 @@ export function createApp({env=process.env,fetchImpl=outboundFetch,verifyRenter=
     if(!(failure instanceof ScanError))failure=new ScanError(500,'scan_unavailable','Photo analysis is unavailable. Enter items manually.');
     res.status(failure.status).json({error:failure.message,code:failure.code});
   });
-  if(dist&&fs.existsSync(path.join(dist,'index.html'))){app.use(express.static(dist));app.get('*',(_req,res)=>res.sendFile(path.join(dist,'index.html')));}
+  const index=dist&&path.join(dist,'index.html');
+  if(env.NODE_ENV==='production'&&dist&&!fs.existsSync(index)) {
+    throw new Error('Frontend build missing. Run npm run build before starting production.');
+  }
+  if(index&&fs.existsSync(index)){
+    app.use('/assets',express.static(path.join(dist,'assets'),{maxAge:'1y',immutable:true}));
+    app.use(express.static(dist,{index:false}));
+    app.get('*',(req,res)=>{
+      if(!req.accepts('html')||req.path.startsWith('/assets/')||path.extname(req.path)||req.path.split('/').some(part=>part.startsWith('.'))) {
+        return res.status(404).type('text').send('Not found');
+      }
+      res.set('Cache-Control','no-cache').sendFile(index);
+    });
+  }
   return app;
 }
