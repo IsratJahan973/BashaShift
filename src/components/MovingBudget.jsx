@@ -3,21 +3,21 @@ import { calculateMovingBudget, effortUnits } from '../lib/pricing.js';
 import { money } from '../domain.js';
 
 // Invented planning assumptions only. Independent movers still choose their own quotation.
-const demoAssumptions={base:850,perKm:45,perUnit:150,perFloorUnit:20,workload:1,margin:20};
+const illustrativeAssumptions={base:850,perKm:45,perUnit:150,perFloorUnit:20,workload:1,margin:20};
 const fields=[
   ['base','Base (BDT)',0,100000],['perKm','Per km (BDT)',0,100000],
   ['perUnit','Per effort unit (BDT)',0,100000],['perFloorUnit','Per stair-floor × unit (BDT)',0,100000],
   ['workload','Workload multiplier',0.5,3],['margin','Range ± %',1,80],
 ];
 export default function MovingBudget({move,pending=false,mover=false}) {
-  const [assumptions,setAssumptions]=useState(()=>({...demoAssumptions}));
+  const [assumptions,setAssumptions]=useState(()=>({...illustrativeAssumptions}));
   const budget=calculateMovingBudget(move,assumptions);
   const content=<>
     <p className="small muted">{move.items.reduce((sum,item)=>sum+Number(item.qty||0),0)} items · {move.km} km · Floors {move.fromFloor} → {move.toFloor} · {move.hasLift?'Lift at both ends':'Stairs'}</p>
     {pending?<p role="status" className="budget-pending">Review or discard photo suggestions to update the range.</p>:budget?<div role="status" className="budget-result">
-      <strong className="budget-range">{money(budget.low)}–{money(budget.high)}</strong><span>Illustrative planning range</span>
+      <strong className="budget-range">{money(budget.low)}–{money(budget.high)}</strong><span>Illustrative estimate — not a mover quotation</span>
     </div>:<p role="status" className="small">Add furniture and valid distance/floors to see a range. Check any edited assumptions.</p>}
-    <p className="small budget-disclosure">Demo assumptions, not verified market rates or a guaranteed quote. Movers set their own final price.</p>
+    <p className="small budget-disclosure">Editable example assumptions, not verified Bangladeshi market rates. Movers set their own final price.</p>
     <details className="budget-calculation"><summary>How calculated · Edit assumptions</summary>
       <div className="guidance-fields">{fields.map(([key,label,min,max])=><label className="field" key={key}><span>{label}</span>
         <input className="form-control" aria-label={label} type="number" min={min} max={max} step={key==='workload'?'0.1':'1'} value={assumptions[key]}

@@ -1,5 +1,5 @@
 export const REQUEST_FIELDS = 'id,renter_id,property_id,from_area,to_area,moving_date,km,from_floor,to_floor,has_lift,estimate,contact_consent,status,created_at';
-export const emptyDatabase = () => ({ listings: [], inquiries: [], requests: [], workers: [], selectedWorkerId: null });
+export const emptyDatabase = () => ({ listings: [], inquiries: [], requests: [], workers: [] });
 
 export async function result(query) {
   const { data, error } = await query;
@@ -45,13 +45,12 @@ export async function loadDatabase(client, profile) {
       customerName: contact.customer_name || '', customerPhone: contact.customer_phone || '', notes: contact.notes || '',
       items: inventory.filter(i => i.request_id === r.id).map(i => ({ name: i.category, qty: i.quantity })),
       offers: offers.filter(o => o.request_id === r.id).map(o => ({ ...o, workerId: o.mover_id })),
-      selectedOfferId: active.find(b => b.request_id === r.id)?.offer_id || null, sample: false };
+      selectedOfferId: active.find(b => b.request_id === r.id)?.offer_id || null };
   });
   const moverIds = [...new Set([...offers.map(o => o.mover_id), ...(profile.role === 'mover' ? [profile.id] : [])])];
   const workers = moverIds.length ? await result(client.rpc('mover_summaries', { mover_ids: moverIds })) : [];
   data.workers = workers.map(w => ({ id: w.id, name: w.display_name, area: w.service_area, available: w.is_available,
-    phone: w.phone || '', sample: false, skills: ['Moving'], avatar: w.display_name.slice(0,2).toUpperCase() }));
-  data.selectedWorkerId = profile.role === 'mover' ? profile.id : null;
+    phone: w.phone || '', skills: ['Moving'], avatar: w.display_name.slice(0,2).toUpperCase() }));
   return data;
 }
 

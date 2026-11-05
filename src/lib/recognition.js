@@ -16,10 +16,9 @@ export function reviewInventory(items) {
   }).filter(item=>item.qty>0);
 }
 
-export async function scanFurniture({ images,token,demoMode,signal,fetchImpl=fetch }) {
+export async function scanFurniture({ images,token,signal,fetchImpl=fetch }) {
   const headers={ 'Content-Type':'application/json' };
-  if(token && !demoMode)headers.Authorization='Bearer '+token;
-  if(demoMode)headers['X-BashaShift-Demo']='1';
+  if(token)headers.Authorization='Bearer '+token;
   const response=await fetchImpl('/api/scan',{ method:'POST',headers,body:JSON.stringify({ images,consent:true }),signal });
   let data;
   try{data=await response.json();}catch{throw new Error('Photo analysis is unavailable. Your manual inventory is unchanged.');}

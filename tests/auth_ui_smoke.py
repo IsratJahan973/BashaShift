@@ -88,7 +88,7 @@ with app_server() as base_url, sync_playwright() as p:
                 auth_state['signed_in']=False
                 respond(route, {})
             elif '/rest/v1/properties' in request.url:
-                respond(route,[property_fixture] if auth_state['signed_in'] and role=='renter' else [])
+                respond(route,[property_fixture])
             elif '/rest/v1/profiles' in request.url:
                 respond(route, profile)
             elif '/rest/v1/rpc/mover_summaries' in request.url:
@@ -99,8 +99,13 @@ with app_server() as base_url, sync_playwright() as p:
         page.route('http://127.0.0.1:54329/**', api)
         page.route('https://fonts.googleapis.com/**', lambda route: route.abort())
         page.route('https://fonts.gstatic.com/**', lambda route: route.abort())
-        page.goto(base_url, wait_until='domcontentloaded')
-        expect(page.locator('.home-card')).to_have_count(0)
+        page.goto(base_url+'?demo=1', wait_until='domcontentloaded')
+        expect(page.locator('.home-card')).to_have_count(1)
+        assert 'demo=' not in page.url
+        expect(page.get_by_text('Exact preference match',exact=True)).to_have_count(0)
+        page.get_by_role('button',name='Plan a move',exact=True).click()
+        expect(page.get_by_role('heading',name='Renter / ভাড়াটিয়া account required')).to_be_visible()
+        page.get_by_role('button',name='BashaShift home',exact=True).click()
         page.get_by_role('button', name='Sign in', exact=True).click()
         dialog = page.get_by_role('dialog', name='Account access')
         dialog.get_by_role('button', name='New here? Create an account', exact=True).click()
@@ -137,10 +142,10 @@ with app_server() as base_url, sync_playwright() as p:
             # Authenticated UI journey; both Auth and the provider endpoint are HTTP fixtures.
             page.get_by_role('navigation',name='Main navigation').get_by_role('button',name='Explore homes',exact=True).click()
             expect(page.locator('.home-card')).to_have_count(1)
-            expect(page.locator('.match-reasons li')).to_have_count(2)
+            expect(page.locator('.match-reasons li')).to_have_count(0)
             expect(page.get_by_label('Maximum monthly rent',exact=True)).to_have_count(1)
             page.get_by_label('Maximum monthly rent',exact=True).fill('20000')
-            expect(page.get_by_text('Matches your requirements',exact=True)).to_be_visible()
+            expect(page.get_by_text('Matches your filters',exact=True)).to_be_visible()
             expect(page.get_by_text('Preference/value score:',exact=False)).not_to_be_visible()
             page.get_by_text('More preferences',exact=False).click()
             page.get_by_label('Lift / লিফট required',exact=True).check()
@@ -152,7 +157,7 @@ with app_server() as base_url, sync_playwright() as p:
             page.get_by_text('More preferences',exact=False).click()
             capture(page,'home-search-auth-mocked')
             page.get_by_role('navigation',name='Main navigation').get_by_role('button',name='Moving services',exact=True).click()
-            before=page.locator('.budget-range').inner_text()
+            expect(page.locator('.budget-range')).to_have_count(0)
             page.get_by_role('button',name='Continue to furniture',exact=True).click()
             def scan(route):
                 assert route.request.headers.get('authorization')=='Bearer '+token
@@ -175,7 +180,7 @@ with app_server() as base_url, sync_playwright() as p:
             page.get_by_label('Detected Bed quantity',exact=True).fill('3')
             page.get_by_role('button',name='Apply reviewed inventory',exact=True).click()
             expect(page.locator('.budget-range')).to_have_text('৳2,420–৳3,630')
-            assert page.locator('.budget-range').inner_text()!=before
+            assert page.locator('.budget-range').inner_text()
             page.get_by_role('button',name='Continue to estimate',exact=True).click()
             expect(page.get_by_label('Your name *', exact=True)).to_have_value(profile['display_name'])
             assert scan_requests==[True]
@@ -185,8 +190,10 @@ with app_server() as base_url, sync_playwright() as p:
             expect(page.get_by_role('button', name='Save mover profile', exact=True)).to_be_visible()
             assert page.get_by_text('Choose demo worker / registered worker', exact=True).count() == 0
         assert page.evaluate("localStorage.getItem('bashashift-prototype-v1')") is None
-        page.set_viewport_size({'width':390,'height':844})
-        assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'Mobile overflow'
+        capture(page,role+'-authenticated-mocked')
+        for width in [360,390]:
+            page.set_viewport_size({'width':width,'height':844})
+            assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'Mobile overflow'
         page.get_by_role('button', name='Sign out', exact=True).click()
         page.get_by_role('button', name='Sign in', exact=True).wait_for()
         recovery_token = secrets.token_urlsafe(32)

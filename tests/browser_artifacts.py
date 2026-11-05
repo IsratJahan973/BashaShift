@@ -10,9 +10,9 @@ def capture(page, name):
         return
     target=Path(directory)
     target.mkdir(parents=True,exist_ok=True)
-    dismiss=page.get_by_role('button',name='Dismiss',exact=True)
-    if dismiss.is_visible():
-        dismiss.click()
+    # Toasts expire while Playwright waits for stability. Dismiss any present
+    # button atomically so an optional screenshot cannot fail on that race.
+    page.get_by_role('button',name='Dismiss',exact=True).evaluate_all('(buttons)=>buttons.forEach(button=>button.click())')
     viewport=page.viewport_size
     for width in [1440,390,360]:
         page.set_viewport_size({'width':width,'height':1000 if width==1440 else 844})

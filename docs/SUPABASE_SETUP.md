@@ -69,10 +69,9 @@ apply this foundation blindly to a project already used by another application.
 - Email login is not identity, property ownership, or provider verification.
   Listings and providers remain explicitly unverified. No payment or new AI
   integration was added in this phase.
-- With no Supabase configuration, the labeled demo remains functional. With a
-  configured project, live mode shows database records without mixing in sample
-  data. **Try demo** uses a separate local dataset. Failed live writes never
-  fall back to a pretend local success.
+- Public visitors browse published database listings. Actions require the correct
+  account role. Missing configuration shows an unavailable state; failed writes
+  never fall back to local fake success. Legacy `?demo=1` URLs cannot change this.
 - Published property changes use Realtime. Other authorized records refresh on
   focus, every 15 seconds, or via **Refresh listings**. Do not add profiles,
   inquiries, or moving requests with private columns to a Realtime publication.
@@ -113,14 +112,12 @@ The local PostgreSQL version is configured in `supabase/config.toml`. Match your
 hosted version when using schema-diff tools. `supabase db reset --local` deletes
 the local project's data; use it only on your disposable development instance.
 
-The original domain/demo checks remain available:
+Isolated automated checks:
 
 ```bash
 npm test
 PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chromium npm run test:browser:auth-ui
-python3 tests/offline_smoke.py
-# Against a running app, explicitly select demo when Supabase is configured:
-python3 tests/react_smoke.py --demo
+PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chromium npm run test:browser:ai
 ```
 
 `npm test` includes real migration/RLS execution in embedded PostgreSQL, with
