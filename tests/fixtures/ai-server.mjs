@@ -6,6 +6,8 @@ import {readFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import {PGlite} from '@electric-sql/pglite';
 import {createApp} from '../../server/app.mjs';
+import sharp from 'sharp';
+import {routingAreas} from '../../server/routing-areas.mjs';
 
 const db=new PGlite(),actors=new Map();
 await db.exec(`
@@ -86,6 +88,8 @@ app.all('/rest/v1/:table',async(req,res)=>{
       if(req.method==='GET'){
         const order=req.query.order;assert.ok(!order||order==='created_at.desc','Unsupported fixture ordering');
         rows=(await db.query(`select ${select} from public.${table}${clause}${order?' order by created_at desc':''}`,args)).rows;
+      }else if(req.method==='DELETE'){
+        rows=(await db.query(`delete from public.${table}${clause} returning ${select}`,args)).rows;
       }else{
         const fields=Object.keys(req.body);assert.ok(fields.length&&fields.every(key=>allowed.has(key)),'Unsupported fixture fields');
         let sql;
@@ -100,13 +104,55 @@ app.all('/rest/v1/:table',async(req,res)=>{
     res.json(req.get('accept')?.includes('vnd.pgrst.object')?rows[0]||null:rows);
   }catch(error){res.status(403).json({code:error.code||'fixture_error',message:'Test table access rejected'});}
 });
+// Storage HTTP is a local adapter; actual object/metadata grants and RLS execute below.
+const objects=new Map(),signed=new Map();
+app.post('/storage/v1/object/property-images/*',express.raw({type:()=>true,limit:'10mb'}),async(req,res)=>{
+  try{
+    const path=req.params[0];
+    const form=await new Request('http://fixture.test/upload',{method:'POST',headers:{'Content-Type':req.get('content-type')},body:req.body}).formData();
+    const file=[...form.values()].find(value=>typeof value!=='string');assert.ok(file);
+    const bytes=Buffer.from(await file.arrayBuffer()),info=await sharp(bytes).metadata();
+    assert.equal(info.format,'jpeg');assert.equal(info.exif,undefined);assert.ok(info.width<=1200&&info.height<=1200);
+    await scoped(lookup(req),()=>db.query("insert into storage.objects(bucket_id,name) values ('property-images',$1)",[path]));
+    objects.set(path,bytes);res.json({Id:randomUUID(),Key:'property-images/'+path});
+  }catch(error){res.status(403).json({statusCode:'403',message:'Test upload rejected by validation/RLS'});}
+});
+app.post('/storage/v1/object/sign/property-images',express.json(),async(req,res)=>{
+  try{
+    const rows=await scoped(lookup(req),()=>db.query("select name from storage.objects where bucket_id='property-images'"));
+    const visible=new Set(rows.rows.map(row=>row.name));
+    res.json(req.body.paths.map(path=>{
+      if(!visible.has(path))return {path,error:'Not allowed',signedURL:null};
+      const token=randomUUID();signed.set(token,{path,expires:Date.now()+300000});return {path,error:null,signedURL:'/object/sign/property-images/'+path+'?token='+token};
+    }));
+  }catch{res.status(403).json({statusCode:'403',message:'Test signing rejected'});}
+});
+app.get('/storage/v1/object/sign/property-images/*',(req,res)=>{
+  const grant=signed.get(req.query.token),path=req.params[0];
+  if(!grant||grant.path!==path||grant.expires<Date.now()||!objects.has(path))return res.status(403).end();
+  res.type('image/jpeg').send(objects.get(path));
+});
+app.delete('/storage/v1/object/property-images',express.json(),async(req,res)=>{
+  try{
+    const removed=[];
+    for(const path of req.body.prefixes){
+      const result=await scoped(lookup(req),()=>db.query("delete from storage.objects where bucket_id='property-images' and name=$1 returning name",[path]));
+      if(result.rows.length){objects.delete(path);removed.push({name:path});}
+    }
+    res.json(removed);
+  }catch{res.status(403).json({statusCode:'403',message:'Test removal rejected by RLS'});}
+});
 const items=[{name:'Bed',qty:2,confidence:'high'},{name:'Refrigerator',qty:1,confidence:'medium'},{name:'Boxes',qty:4,confidence:'low'}];
 const outputs=[{items},'Detected furniture:\n```json\n'+JSON.stringify({items})+'\n```\nPlease review.','{"items":[',{items:[]}];
 const origin='http://127.0.0.1:'+process.argv[3];
 app.use(createApp({env:{NODE_ENV:'test',VITE_SUPABASE_URL:origin,VITE_SUPABASE_PUBLISHABLE_KEY:'sb_publishable_browser_fixture',
-  CLOUDFLARE_ACCOUNT_ID:'0'.repeat(32),CLOUDFLARE_AI_TOKEN:randomUUID(),CLOUDFLARE_VISION_MODEL:'@cf/mistralai/mistral-small-3.1-24b-instruct'},
-  dist:process.argv[2],scanLimit:20,fetchImpl:async(url,init)=>{
+  HEIGIT_API_KEY:randomUUID(),CLOUDFLARE_ACCOUNT_ID:'0'.repeat(32),CLOUDFLARE_AI_TOKEN:randomUUID(),CLOUDFLARE_VISION_MODEL:'@cf/mistralai/mistral-small-3.1-24b-instruct'},
+  dist:process.argv[2],scanLimit:20,routeLimit:100,fetchImpl:async(url,init)=>{
     if(String(url).startsWith(origin+'/'))return fetch(url,init);
+    if(String(url).startsWith('https://api.heigit.org/')){
+      const coordinates=JSON.parse(init.body).coordinates;
+      return Response.json({type:'FeatureCollection',features:[{type:'Feature',properties:{summary:{distance:8000}},geometry:{type:'LineString',coordinates}}]});
+    }
     assert.ok(String(url).startsWith('https://api.cloudflare.com/'),'Unexpected external request');
     const payload=JSON.parse(init.body);
     assert.ok(payload.messages[0].content.some(part=>part.type==='image_url'&&part.image_url.url.startsWith('data:image/jpeg;base64,')));
@@ -114,7 +160,7 @@ app.use(createApp({env:{NODE_ENV:'test',VITE_SUPABASE_URL:origin,VITE_SUPABASE_P
     return Response.json({success:true,errors:[],result:{response:outputs.shift()}});
   }}));
 const server=app.listen(Number(process.argv[3]),'127.0.0.1',()=>{
-  console.log('Browser fixture: embedded production RLS; Auth HTTP and Cloudflare are mocked.');
+  console.log('Browser fixture: embedded production RLS; Auth/Storage HTTP, Cloudflare and routing providers are mocked.');
   process.send?.({url:origin});
 });
 const close=()=>{server.closeAllConnections();server.close(async()=>{await db.close();process.exit(0);});};

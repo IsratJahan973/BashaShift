@@ -61,9 +61,9 @@ with sync_playwright() as playwright:
     expect(owner.locator('.mini-entry').filter(has_text=title)).to_have_count(1)
 
     renter.get_by_role('button', name='Refresh listings', exact=True).click()
-    renter.get_by_label('Search homes', exact=True).fill(title)
-    expect(renter.locator('.home-card')).to_have_count(1)
-    renter.get_by_role('button', name='View details', exact=True).click()
+    renter.get_by_label('Area',exact=True).select_option('Banasree')
+    expect(renter.locator('.home-card').filter(has_text=title)).to_have_count(1)
+    renter.locator('.home-card').filter(has_text=title).get_by_role('button', name='View details', exact=True).click()
     details = renter.get_by_role('dialog', name='Property details')
     assert details.get_by_role('link', name='Call owner').count() == 0
     details.get_by_role('button', name='Send inquiry', exact=True).click()
@@ -73,10 +73,13 @@ with sync_playwright() as playwright:
 
     navigate(renter, 'Explore homes')
     renter.get_by_role('button', name='Refresh listings', exact=True).click()
-    renter.get_by_role('button', name='View details', exact=True).click()
+    renter.locator('.home-card').filter(has_text=title).get_by_role('button', name='View details', exact=True).click()
     expect(renter.get_by_role('link', name='Call owner', exact=True)).to_be_visible()
     renter.get_by_role('button', name='Plan move here', exact=True).click()
+    renter.get_by_label('Approx. distance (km)',exact=True).fill('5')
     renter.get_by_role('button',name='Continue to furniture',exact=True).click()
+    renter.locator('.manual-inventory>summary').click()
+    renter.get_by_role('button',name='Add Bed',exact=True).click()
     renter.get_by_role('button',name='Continue to estimate',exact=True).click()
     renter.get_by_label('Notes for movers', exact=True).fill('Private local test unit and access notes')
     renter.get_by_label('I agree to share my phone number').check()

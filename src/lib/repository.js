@@ -1,3 +1,4 @@
+import {sortPropertyPhotos,stagePropertyPhotos,validatePropertyPhotos} from './property-photos.js';
 export const REQUEST_FIELDS = 'id,renter_id,property_id,from_area,to_area,moving_date,km,from_floor,to_floor,has_lift,estimate,contact_consent,status,created_at';
 export const emptyDatabase = () => ({ listings: [], inquiries: [], requests: [], workers: [] });
 
@@ -10,11 +11,16 @@ export async function result(query) {
 export async function loadDatabase(client, profile) {
   const listings = await result(client.from('properties').select('*,property_images(*)').order('created_at', { ascending: false }));
   const images = listings.flatMap(p => p.property_images).map(i => i.storage_path);
-  const signed = images.length ? await result(client.storage.from('property-images').createSignedUrls(images, 300)) : [];
-  const urls = new Map(signed.map(i => [i.path, i.signedUrl]));
   const data = emptyDatabase();
-  data.listings = listings.map(p => ({ ...p, ownerName: p.owner_name, ownerPhone: '', sample: p.is_demo,
-    image: urls.get([...p.property_images].sort((a,b) => a.position - b.position || b.created_at.localeCompare(a.created_at))[0]?.storage_path) || '', tone: 'sage' }));
+  let signed=[];
+  try{if(images.length)signed=await result(client.storage.from('property-images').createSignedUrls(images,300));}
+  catch{data.photoError='Property photos are temporarily unavailable. Try refreshing.';}
+  if(signed.some(photo=>photo.error||!photo.signedUrl))data.photoError='Some property photos are temporarily unavailable. Try refreshing.';
+  const urls=new Map(signed.filter(i=>i.signedUrl&&!i.error).map(i=>[i.path,i.signedUrl]));
+  data.listings = listings.map(p => {
+    const photos=sortPropertyPhotos(p.property_images).map(photo=>({id:photo.id,path:photo.storage_path,position:photo.position,url:urls.get(photo.storage_path)||''}));
+    return {...p,ownerName:p.owner_name,ownerPhone:'',sample:p.is_demo,photos,image:photos[0]?.url||'',tone:'sage'};
+  });
   if (!profile) return data;
   const [inquiries, requests, inventory, offers, bookings] = await Promise.all([
     result(client.from('viewing_inquiries').select('*,properties(title,owner_name)').order('created_at', { ascending: false })),
@@ -64,19 +70,28 @@ export async function saveProperty(client, profile, listing, editingId) {
     block: listing.block.trim(), rent: Number(listing.rent), beds: Number(listing.beds), baths: Number(listing.baths),
     sqft: Number(listing.sqft) || 0, floor: Number(listing.floor), lift: listing.lift, balcony: listing.balcony,
     parking: listing.parking, available: listing.available, description: listing.description };
-  await saveProfile(client, profile.id, { display_name: listing.ownerName.trim(), phone: listing.ownerPhone.replace(/\D/g, '') });
-  let property;
-  if (editingId) property = await result(client.from('properties').update(fields).eq('id', editingId).select().single());
-  else property = await result(client.from('properties').insert({ ...fields, status: 'draft' }).select().single());
-  if (listing.image?.startsWith('data:')) {
-    const image = await (await fetch(listing.image)).blob();
-    const path = `${profile.id}/${property.id}/${crypto.randomUUID()}.jpg`;
-    await result(client.storage.from('property-images').upload(path, image, { contentType: 'image/jpeg' }));
-    try { await result(client.from('property_images').insert({ property_id: property.id, storage_path: path })); }
-    catch (error) { await client.storage.from('property-images').remove([path]); throw error; }
+  if(profile?.role!=='owner')throw new Error('An owner account is required.');
+  let property,staged;
+  if(editingId){property=await result(client.from('properties').select('id,owner_id,status').eq('id',editingId).single());if(property.owner_id!==profile.id)throw new Error('You can only edit your own property.');}
+  const photos=listing.photos;
+  const unchangedLarge=photos?.length>6&&listing.originalPhotos?.length===photos.length&&photos.every((photo,i)=>photo.path===listing.originalPhotos[i].path);
+  if(photos&&!unchangedLarge)validatePropertyPhotos(photos);
+  await saveProfile(client,profile.id,{display_name:listing.ownerName.trim(),phone:listing.ownerPhone.replace(/\D/g,'')});
+  if(!editingId)property=await result(client.from('properties').insert({...fields,status:'draft'}).select().single());
+  try{
+    if(photos)staged=await stagePropertyPhotos(client,profile.id,property.id,photos,editingId?listing.originalPhotos:[]);
+    else if(listing.image?.startsWith('data:')){
+      // Compatibility with callers of the original single-photo repository API.
+      const current=await result(client.from('property_images').select('*').eq('property_id',property.id));
+      staged=await stagePropertyPhotos(client,profile.id,property.id,[...sortPropertyPhotos(current).map(p=>({path:p.storage_path})),{data:listing.image}]);
+    }
+    await result(client.from('properties').update({...fields,status:'published'}).eq('id',property.id));
+  }catch(error){
+    if(staged&&!(await staged.rollback()))throw new Error('Property was not published. Original photo files are retained. Refresh before retrying.');
+    throw error;
   }
-  await result(client.from('properties').update({ status: 'published' }).eq('id', property.id));
-  return property;
+  const cleanupPending=await staged?.cleanup();
+  return {...property,photoWarning:cleanupPending?'Listing saved. Some photos could not be removed. Refresh and retry their removal.':''};
 }
 
 export const archiveProperty = (client, id) => result(client.from('properties').update({ status: 'archived' }).eq('id', id));

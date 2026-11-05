@@ -1,18 +1,19 @@
-# Submission acceptance: issues #10 and #11
+# Submission acceptance: issues #10, #11 and #14
 
-PR #13 targets `feat/production-release` from `8ddee44`. No merge or deployment.
-Public demo paths have been retired; existing ranking, pricing, Cloudflare provider
-and Supabase SQL/RLS/booking functions are unchanged.
+Base: merged production commit `69b0cb8`. Branch: `feat/mobile-gallery-routing`,
+targeting `feat/production-release` in one new PR. No merge or deployment.
+Existing ranking, pricing, Cloudflare provider and Supabase SQL/RLS/booking
+functions are unchanged.
 
 ## Evidence boundaries
 
 The seven actors and every `TEST` property/request live only in a fresh in-memory
 PGlite database. The suite executes the existing migration, PostgreSQL roles,
-RLS policies, triggers and booking/contact RPCs. Hosted Auth and Cloudflare HTTP
-responses are mocked. No hosted accounts, listings, schema or customer records
+RLS policies, triggers and booking/contact RPCs. Hosted Auth/Storage HTTP, Cloudflare, routing and map tiles are mocked. No hosted accounts, listings, schema or customer records
 were created or modified. No production mocks or application features were added.
 The browser suite also uses the real SQL/RLS in a separate disposable database
-with seven HTTP-authenticated contexts; its Auth service and provider are fixtures.
+with seven HTTP-authenticated contexts; its Auth/Storage adapters and providers
+are fixtures. Storage object and image metadata RLS still execute in PostgreSQL.
 
 ## Actor results
 
@@ -43,6 +44,16 @@ with seven HTTP-authenticated contexts; its Auth service and provider are fixtur
 | AI → reviewed inventory → budget | PASS (mocked AI) | Sanitized JPEG uses the existing Mistral request. Other quantity corrected 4→1, Boxes manually added. Approved 11 effort units produce illustrative 3,168–4,752 BDT using the editable illustrative assumptions; no automatic inventory acceptance or quote override |
 | Scan protections | PASS (mocked Auth/AI) | Protected database role defeats forged Auth metadata; wrong role 403, expired session 401, missing consent 400, oversized photo 413, per-actor limit 429, malformed output 502/manual fallback. Existing regressions also cover timeouts and image validation |
 | Desktop/mobile | PASS | 1440/390/360px captures; Bangla labels, mobile navigation, readable forms, no horizontal overflow, step/data preservation |
+| Camera affordance | PASS (simulated files) | Rear-camera hint, distinct camera/gallery pickers, sequential additions, max-three enforcement, removable previews, consent and review; hardware capture remains NOT TESTED |
+| Six-photo gallery | PASS | Unit tests cover six uploads/limits. Browser covers three JPEG uploads, metadata reorder, retained images on editing, replacement/removal, arrows/keyboard/swipe/count and mobile previews. Signed-URL failures retain paths in unit tests |
+| Storage failure/recovery | PASS (local adapters) | Upload and metadata failures roll back; original objects retained on uncertain recovery. Failed removals remain listed for retry; successful removal makes the object unavailable. No RLS grant changes |
+| Single apartment search | PASS | One primary area dropdown, maximum rent, bedrooms and optional preferences; keyword searches removed; mixed-case/trimmed areas match |
+| Automatic road distance | PASS (mocked service) | Current HeiGIT POST contract, allowlisted neighborhood centers, validated meter summary/GeoJSON, timeout, rate limit, bounded cache, safe errors, no old/invented distance, manual override |
+| Route concurrency and fallback | PASS (mocked service) | Distinct Banasree→Mirpur/Mohammadpur calls update budget; stale responses ignored; manual distance retained across steps/navigation; missing key, same-area, Other and service failures fall back |
+| Optional map | PASS (mocked tiles) | Leaflet loads only when opened, markers/returned line/visible OSM attribution, keyboard zoom/reset, tile failure and route-change cleanup, 360/390/1440px |
+| Authenticated live HeiGIT route | NOT TESTED | No HEIGIT_API_KEY or provider egress in this environment; automatic routing is not claimed live-verified |
+| Physical-phone camera capture | NOT TESTED | Needs an existing renter on an actual Android/iOS phone; capture is a browser hint |
+| Hosted gallery upload/edit/removal | NOT TESTED | No authorized hosted session/Storage integration access; all test photos stayed in local fixtures |
 | Genuine authenticated hosted AI scan | NOT TESTED | No authorized hosted session/provider credentials or service egress in this environment |
 | Organizer sticker | NOT TESTED | Actual organizer-provided asset unavailable; placeholder removed, no imitation created |
 
@@ -53,10 +64,10 @@ Final application FAIL results: none.
 
 ## Repeatable checks
 
-Final results: **100 automated tests PASS, 0 FAIL**; production build PASS;
+Final results: **121 automated tests PASS, 0 FAIL**; production build PASS;
 five AI browser scenarios PASS; all three Auth roles PASS; seven-actor authenticated
 browser booking journey PASS; guidance at 360/390px PASS. Auth HTTP and AI are
-mocked; production SQL/RLS executes in embedded PostgreSQL. Retired demo-reducer
+mocked, including routing and map tiles; production SQL/RLS executes in embedded PostgreSQL. Retired demo-reducer
 checks are replaced by the authenticated transaction/browser scenarios.
 
 `node --test tests/acceptance-matrix.test.mjs` runs the 14-scenario matrix without
@@ -85,3 +96,22 @@ Hosted Auth/Storage/AI checks remain NOT TESTED here: there is no authorized hos
 session, backend AI credential or provider egress. The optional full local Supabase
 REST/Storage suite is NOT TESTED because the Supabase CLI/instance is unavailable.
 The organizer sticker asset is still missing; none was invented.
+
+## Minimal release checks for issue #14
+
+After an approved manual deployment, add server-only `HEIGIT_API_KEY` in Render
+and permit outbound `api.heigit.org`. Use an existing renter to select
+Banasree→Mirpur, then Banasree→Mohammadpur. Require authenticated `/api/route`
+HTTP 200 with `source: heigit`, `approximate: true`, a positive provider distance
+and a valid road LineString; check budget/map updates and manual override. A
+missing key must leave manual distance usable. OSM attribution remains visible.
+
+On a real phone, verify Take Photo opens the rear camera where supported and
+Gallery remains usable; inspect consent, review and manual fallback. Hosted owner
+photo upload/reorder/edit/removal should use explicitly approved isolated test
+listings only. This task created no hosted accounts or property data.
+
+Gallery metadata uses the existing INSERT/DELETE grants with compensating rollback;
+it is not a new database transaction. Original objects are retained if rollback
+cannot be confirmed, and errors request refresh. Removed objects are confirmed
+deleted before their metadata is cleared, making a failed removal retryable.

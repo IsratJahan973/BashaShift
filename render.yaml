@@ -28,3 +28,6 @@ services:
         value: "false"
       - key: OPENAI_MODEL
         value: gpt-4.1-mini
+      # Optional; leave unset until an authenticated HeiGIT route is verified.
+      - key: HEIGIT_API_KEY
+        sync: false
