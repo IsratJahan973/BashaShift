@@ -6,6 +6,8 @@ BashaShift connects **apartment discovery and relocation planning** in one mobil
 
 **[Try BashaShift](https://bashashift.onrender.com/)** · [Project QA](docs/ACCEPTANCE_QA.md) · [AI verification and setup](docs/AI_SETUP.md)
 
+Current release source: [`feat/production-release`](https://github.com/IsratJahan973/BashaShift/tree/feat/production-release). The setup commands below select this branch explicitly.
+
 > **Project status:** Working hackathon prototype. Listings and service providers are user-submitted and **not identity- or availability-verified**. No online payments are collected.
 
 ## How it works
@@ -48,7 +50,7 @@ See [acceptance results](docs/ACCEPTANCE_QA.md) for test scope and limitations.
 **Prerequisites:** Node.js 24 and an authorized Supabase project.
 
 ```bash
-git clone https://github.com/IsratJahan973/BashaShift.git
+git clone --branch feat/production-release https://github.com/IsratJahan973/BashaShift.git
 cd BashaShift
 npm ci
 cp .env.example .env

@@ -67,7 +67,7 @@ with sync_playwright() as playwright:
     details = renter.get_by_role('dialog', name='Property details')
     assert details.get_by_role('link', name='Call owner').count() == 0
     details.get_by_role('button', name='Send inquiry', exact=True).click()
-    expect(renter.get_by_role('heading', name='My requests', exact=True)).to_be_visible()
+    expect(renter.get_by_role('heading',name='Renter Dashboard', exact=True)).to_be_visible()
     owner.get_by_role('button', name='Refresh listings', exact=True).click()
     owner.get_by_role('button', name='Acknowledge', exact=True).click()
 
@@ -84,7 +84,7 @@ with sync_playwright() as playwright:
     renter.get_by_label('Notes for movers', exact=True).fill('Private local test unit and access notes')
     renter.get_by_label('I agree to share my phone number').check()
     renter.get_by_role('button', name='Publish moving request', exact=True).click()
-    expect(renter.get_by_role('heading', name='My requests', exact=True)).to_be_visible()
+    expect(renter.get_by_role('heading',name='Renter Dashboard', exact=True)).to_be_visible()
 
     navigate(mover, 'Mover desk')
     mover.get_by_role('button', name='Refresh listings', exact=True).click()
