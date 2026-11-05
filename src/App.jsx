@@ -42,6 +42,19 @@ const fieldBangla = {
 };
 const fieldHint = label => fieldBangla[label] || fieldBangla[label?.replace(/ \*$/, '')];
 
+function BuildathonBranding() {
+  const [unavailable, setUnavailable] = useState(false);
+  return <aside className="event-branding" aria-label="Buildathon event branding">
+    <a href="https://yunet-aignite26.devpost.com/" target="_blank" rel="noopener noreferrer">
+      {/* Organizer-hosted event banner; this is not the separate required Built For sticker. */}
+      {unavailable ? <span>Ostad Presents YUNet AIgnite Buildathon 2026</span> : <img
+        src="https://d112y698adiu2z.cloudfront.net/photos/production/challenge_photos/005/545/026/datas/full_width.png"
+        alt="Ostad Presents YUNet AIgnite Buildathon 2026 — event banner"
+        referrerPolicy="no-referrer" decoding="async" onError={()=>setUnavailable(true)}/>}
+    </a>
+  </aside>;
+}
+
 function PropertyArt({listing, className=''}) {
   return <div className={`property-art ${listing.tone||'sage'} ${className}`}>
     {listing.image ? <img src={listing.image} alt={`${listing.title} uploaded by owner`} /> : <svg className="home-illustration" viewBox="0 0 470 290" aria-hidden="true">
@@ -396,6 +409,7 @@ function App() {
   async function declineRequest(id){if(!requireRole('renter'))return;await onlineAction(()=>repository.reopenRequest(supabase,id),'Request reopened. Contact is no longer shared with the declined mover.');}
   const currentListing = listing && db.listings.find(x=>x.id===listing.id);
   return <div className="app-shell" data-bangla={showBangla}>
+    <BuildathonBranding/>
     <header className="site-header"><div className="header-inner container"><button className="brand" onClick={()=>go('explore')} aria-label="BashaShift home"><span className="brand-logo"><House size={21} strokeWidth={2.6}/><MoveRight size={13} strokeWidth={3}/></span><span>Basha<span>Shift</span><small>Home to home, made simple.</small></span></button>
       <nav className={`top-nav ${mobileNav?'open':''}`} aria-label="Main navigation">{visibleNav.map(item=><button key={item.key} aria-label={`${item.english}${item.key==='activity'&&db.requests.length>0?` ${db.requests.length}`:''}`} className={page===item.key?'active':''} onClick={()=>go(item.key)}><span>{item.english}{item.key==='activity'&&db.requests.length>0&&<span className="count-dot">{db.requests.length}</span>}</span><small lang="bn">{item.bangla}</small></button>)}</nav>
       <div className="header-actions"><button type="button" className="language-toggle" aria-label="Show Bangla labels" aria-pressed={showBangla} onClick={()=>setShowBangla(value=>!value)}>বাংলা</button>{supabase&&<div className="auth-actions">{auth.session?<button className="btn btn-small btn-soft" aria-label="Sign out" disabled={saving} onClick={signOut}>Sign out</button>:<button className="btn btn-small btn-primary" aria-label="Sign in" disabled={auth.loading} onClick={()=>setAuthDialog('renter')}>Sign in</button>}</div>}<button className="mobile-menu" onClick={()=>setMobileNav(x=>!x)} aria-label="Toggle navigation / মেনু"><Menu size={23}/></button></div></div></header>

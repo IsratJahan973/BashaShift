@@ -206,3 +206,10 @@
 .route-distance{grid-column:1/-1}.route-distance .field{max-width:350px}.route-actions{display:flex;flex-wrap:wrap;gap:8px}.route-actions .btn{min-height:44px}.route-map-disclosure{margin-top:15px;padding:14px;border:1px solid #dce7dc;border-radius:12px}.route-map-disclosure summary{cursor:pointer;font-weight:700;color:#21583e;min-height:28px}.route-map{height:280px;width:100%;z-index:0;border-radius:10px;background:#edf3ed}.route-map .leaflet-control-attribution{font-size:10px;max-width:100%;white-space:normal}.route-map .leaflet-control-zoom a{width:44px;height:44px;line-height:44px}.route-marker{border-radius:50% 50% 50% 0;background:#15553b;color:white;display:grid;place-items:center;border:2px solid white;font-weight:800;box-shadow:0 1px 5px #777}.route-map-footer{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}.route-map-footer small{font-size:11px}.route-map-footer a{text-decoration:underline}.property-gallery .gallery-arrow{z-index:1}
 @media(max-width:600px){.photo-order-actions{display:grid;grid-template-columns:repeat(2,minmax(44px,1fr))}.photo-order-actions>.btn:last-child{grid-column:1/-1}}
 .route-map .route-marker{display:grid;place-items:center}.route-map-footer>.btn{min-width:44px;min-height:44px}.route-map-footer>small{flex-basis:100%}
+
+/* Keep the organizer's centered artwork unchanged; only empty canvas edges may overflow. */
+.event-branding{height:88px;display:flex;justify-content:center;align-items:center;padding:6px 16px;background:#fffaf0;border-bottom:1px solid var(--line)}
+.event-branding>a{display:flex;justify-content:center;align-items:center;max-width:100%;min-height:76px;overflow:hidden;border-radius:4px;text-align:center}
+.event-branding img{display:block;height:76px;width:auto;max-width:none;flex-shrink:0}
+.event-branding span{max-width:420px;padding:8px 12px;font-size:13px;font-weight:700;line-height:1.5;color:var(--ink)}
+.event-branding>a:focus-visible{outline:3px solid #226a4f;outline-offset:2px}
