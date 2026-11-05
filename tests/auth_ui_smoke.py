@@ -135,6 +135,10 @@ with app_server() as base_url, sync_playwright() as p:
         dialog.get_by_role('button', name='Sign in', exact=True).click()
         dialog.wait_for(state='hidden')
         page.get_by_role('button', name='Sign out', exact=True).wait_for()
+        dashboard_titles={'owner':'Property Owner Dashboard','renter':'Renter Dashboard','mover':'Moving Service Provider Dashboard'}
+        dashboard_descriptions={'owner':'Manage listings and viewing inquiries','renter':'Find homes, plan moves, track requests','mover':'Find jobs, submit quotes, manage bookings'}
+        expect(page.get_by_role('heading',name=dashboard_titles[role],exact=True)).to_be_visible()
+        expect(page.get_by_text(dashboard_descriptions[role],exact=True)).to_be_visible()
         page.get_by_role('navigation', name='Main navigation').get_by_role('button', name=workspace, exact=True).click()
         if role == 'owner':
             expect(page.get_by_label('Owner name *', exact=True)).to_have_value(profile['display_name'])

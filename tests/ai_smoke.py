@@ -62,7 +62,7 @@ with sync_playwright() as p:
         page.get_by_role('button',name='Continue to estimate',exact=True).click()
         page.get_by_label('I agree to share my phone number').check()
         page.get_by_role('button',name='Publish moving request',exact=True).click()
-        expect(page.get_by_role('heading',name='My requests',exact=True)).to_be_visible()
+        expect(page.get_by_role('heading',name='Renter Dashboard',exact=True)).to_be_visible()
         expect(page.locator('.request-card')).to_have_count(1)
     def responsive(page,name):
         capture(page,name)
@@ -172,7 +172,7 @@ with sync_playwright() as p:
             capture(page,'renter-property-gallery')
             expect(dialog.get_by_role('link',name='Call owner')).to_have_count(0)
             dialog.get_by_role('button',name='Send inquiry',exact=True).click()
-            expect(page.get_by_role('heading',name='My requests',exact=True)).to_be_visible()
+            expect(page.get_by_role('heading',name='Renter Dashboard',exact=True)).to_be_visible()
         print('PASS '+key+' hard filters and recommendation order (isolated RLS browser)')
     refresh(owner)
     expect(owner.get_by_text('TEST R1 · TEST P1 synthetic apartment',exact=True)).to_be_visible()
