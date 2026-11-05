@@ -1,47 +1,73 @@
 # BashaShift
 
-Find a home. Plan your move. Compare independent mover quotations and confirm by phone.
+**Your Next Home. Your Next Move. Skip the Chaos.**
 
-React + Vite, Express, Supabase Auth/PostgreSQL/Storage/RLS, and server-only Cloudflare Mistral furniture recognition. Public visitors browse published listings; owner, renter and mover actions require the appropriate authenticated account. There is no public demo mode or local fake-data fallback.
+BashaShift connects **apartment discovery and relocation planning** in one mobile-friendly platform for Bangladesh. Renters can find owner-published homes, plan a move using AI-assisted furniture inventory, and compare independent moving quotations. Property owners manage listings and viewing requests; movers quote eligible jobs.
 
-## Development
+**[Try BashaShift](https://bashashift.onrender.com/)** · [Project QA](docs/ACCEPTANCE_QA.md) · [AI verification and setup](docs/AI_SETUP.md)
 
-Requires Node.js 24. Copy `.env.example` to `.env`, set the Supabase project API URL and public key, then run:
+> **Project status:** Working hackathon prototype. Listings and service providers are user-submitted and **not identity- or availability-verified**. No online payments are collected.
+
+## How it works
+
+| User | What they can do |
+| --- | --- |
+| **Renter** | Browse published apartments, filter by area/budget/bedrooms, view explainable preference matches, request viewings, prepare a furniture inventory, compare mover quotations, select a mover and confirm by phone. |
+| **Property owner** | Publish/edit/unpublish property details, upload and organize up to six room photos, and respond to viewing requests. |
+| **Moving provider** | Configure their service area, discover eligible pickup-area requests, submit quotations and manage selected/confirmed jobs. |
+
+### AI-assisted furniture inventory
+
+Renters can **take a photo** on a supported phone or choose up to three images from their gallery. **Cloudflare Workers AI with Mistral Small 3.1 Vision** suggests furniture categories and quantities. Every suggestion must be reviewed and corrected by the renter before it enters their moving inventory; manual entry remains available.
+
+The moving-budget range is calculated from reviewed inventory, distance, floors/lift access and **editable illustrative assumptions**. It is **not an AI market-price prediction, a verified local rate or a mover's quotation**. Apartment matching is similarly **deterministic and explainable**, not AI-generated.
+
+For eligible configured accounts, a separate routing service can calculate an **approximate road distance between neighborhood centers** and display an optional map. Without routing credentials or for unsupported areas, users enter distance manually.
+
+## Technology
+
+- **Frontend:** React, Vite, JavaScript, responsive CSS.
+- **Backend:** Node.js, Express, server-side validation and protected AI/routing endpoints.
+- **Accounts and data:** Supabase Auth, PostgreSQL, Row Level Security (RLS), Storage.
+- **AI:** Cloudflare Workers AI — Mistral Small 3.1 Vision, with image sanitization, consent and mandatory human review.
+- **Optional routing:** HeiGIT/openrouteservice, Leaflet and OpenStreetMap tiles.
+- **Hosting:** Render (one Node web service).
+
+### Privacy and safeguards
+
+The site uses three authenticated account roles. Contact details are protected by database policies and booking flows; only the selected mover receives authorized customer contact information. Uploaded AI photos are re-encoded to remove metadata, and model errors preserve the manual workflow. The app does not claim verified apartment availability, verified mover identity or guaranteed prices.
+
+## Project verification
+
+The current development report records **121 passing automated tests**, including a seven-actor owner/renter/mover acceptance matrix and mobile browser checks. The local suite exercises PostgreSQL RLS and booking transactions; **external Auth, Storage HTTP, Cloudflare AI and routing services are mocked in those automated browser scenarios**. A separate genuine AI furniture-recognition result was observed earlier on the hosted app. The latest gallery, camera and routing integrations still require individual live-device/provider verification.
+
+See [acceptance results](docs/ACCEPTANCE_QA.md) for test scope and limitations.
+
+## Run locally
+
+**Prerequisites:** Node.js 24 and an authorized Supabase project.
 
 ```bash
+git clone https://github.com/IsratJahan973/BashaShift.git
+cd BashaShift
 npm ci
+cp .env.example .env
 npm run dev
 ```
 
-Vite runs on port 5173 and proxies `/api` to Express. Never use service-role, OpenAI or Cloudflare secrets in `VITE_*` variables.
-
-## Render
-
-`render.yaml` keeps one **Free** Node Web Service in Singapore on `feat/production-release`, with automatic deploys off.
-
-- Build: `npm ci --include=dev && npm run build`
-- Start: `npm start`
-- Health: `/api/health`; Render supplies `PORT`.
-- Public build configuration: `VITE_SUPABASE_URL` (project API origin), `VITE_SUPABASE_PUBLISHABLE_KEY`.
-- Backend only: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AI_TOKEN`, `CLOUDFLARE_VISION_MODEL=@cf/mistralai/mistral-small-3.1-24b-instruct`.
-- Optional driving routes: backend-only `HEIGIT_API_KEY`. Missing keys, unsupported areas and same-neighborhood moves use explicit manual distance; no road kilometers are invented. The provider uses the [current HeiGIT endpoint](https://ask.openrouteservice.org/t/deprecating-api-openrouteservice-org-in-favour-of-api-heigit-org/7912).
-- Optional OpenAI backup is disabled unless `AI_ENABLE_OPENAI_FALLBACK=true` and a backend key are configured.
-
-Renters can take photos or choose from their gallery (up to three); rear-camera capture is a browser hint. Owners can upload/reorder up to six room photos using the existing private bucket and image table. Text edits retain existing photos. New files upload before metadata changes; failed changes attempt metadata rollback and retain original files when recovery cannot be confirmed.
-
-Health reports configuration, not successful inference. Scanning requires renter authentication, photo consent and human review. Failed recognition preserves manual inventory. Apartment ranking and illustrative moving estimates use deterministic calculations; assumptions are editable and are not verified market rates. Movers choose their own final prices. Contact access uses existing authorized Supabase transactions.
-
-## Validation
+Add the public Supabase URL and publishable key to `.env`. Configure `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AI_TOKEN` **only on the server** to enable authenticated real furniture scans. Optional `HEIGIT_API_KEY` enables road routing. Never put server tokens in `VITE_*` variables or commit your `.env`.
 
 ```bash
 npm test
 npm run build
-npm run test:browser:auth-ui
-npm run test:browser:ai
-# Routing-only subset:
-npm run test:browser:routes
 ```
 
-Browser tests require Python dependencies from `tests/requirements.txt` and Playwright Chromium. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to use a system browser. The AI browser suite uses seven isolated accounts and the production SQL/RLS in embedded PostgreSQL, with **mocked Auth/Storage HTTP, Cloudflare, routing and map tiles**, never hosted customer data. It covers the full owner → renter → mover → confirmed booking flow, manual fallback and 360/390px layouts. Local Supabase integration commands remain available in `package.json`; they require a disposable local Supabase instance.
+Browser tests and complete local integration require additional dependencies described in [AI setup](docs/AI_SETUP.md) and [Supabase setup](docs/SUPABASE_SETUP.md).
 
-See [acceptance results](docs/ACCEPTANCE_QA.md) and [authenticated live scan steps](docs/AI_SETUP.md#minimal-live-check-after-an-owner-approved-deployment). No migrations or deployment are part of this change.
+## Deployment
+
+The production web application runs at **https://bashashift.onrender.com/**. Render currently deploys the `feat/production-release` branch with manual deployments. Its configuration is documented in [`render.yaml`](render.yaml). `/api/health` reports service readiness flags but does not by itself prove live model inference.
+
+---
+
+**BashaShift** — Built for Bangladesh. One connected journey from home search to moving day.
