@@ -19,20 +19,18 @@ export function ApartmentPreferences({value,onChange}) {
 }
 export function ApartmentExplanation({recommendation,listing}) {
   const reasons=[];
-  if(recommendation.budgetRemaining!==null)reasons.push('Within budget · '+money(recommendation.budgetRemaining)+' remaining');
-  if(recommendation.components.area!==null)reasons.push(recommendation.components.area===1?'Preferred area':'Outside preferred area');
-  if(reasons.length<2&&listing)reasons.push(listing.area,listing.beds+' bedrooms');
-  if(reasons.length<2&&recommendation.components.facilities!==null)reasons.push(recommendation.components.facilities===1?'All optional facilities listed':'Some optional facilities missing');
+  if(recommendation.budgetRemaining!==null)reasons.push(recommendation.budgetRemaining>0?money(recommendation.budgetRemaining)+' under your budget':'Within your budget');
+  if(recommendation.components.area!==null)reasons.push(recommendation.components.area===1?'Preferred area: '+listing.area:'Outside your preferred area');
+  if(reasons.length<2&&recommendation.components.facilities!==null)reasons.push(recommendation.components.facilities===1?'Optional facilities match':'Some optional facilities missing');
+  const hasPreferences=recommendation.components.area!==null||recommendation.components.facilities!==null;
   return <div className="recommendation-explanation">
-    {recommendation.meetsRequiredCriteria&&<strong className="required-criteria-status">Matches your requirements</strong>}
-    <span className={recommendation.match==='exact'?'match-status exact':'match-status partial'}>{recommendation.match==='exact'?'Exact preference match':'Partial preference match'}</span>
-    <ul className="match-reasons">{reasons.slice(0,2).map(reason=><li key={reason}>{reason}</li>)}</ul>
+    {recommendation.meetsRequiredCriteria&&<strong className="required-criteria-status">Matches your filters</strong>}
+    {hasPreferences&&<span className={recommendation.match==='exact'?'match-status exact':'match-status partial'}>{recommendation.match==='exact'?'Exact preference match':'Partial preference match'}</span>}
+    {!!reasons.length&&<ul className="match-reasons">{reasons.slice(0,2).map(reason=><li key={reason}>{reason}</li>)}</ul>}
     <details><summary>Why this match?</summary>
-      <p>All required filters match. Optional preferences determine exact or partial matches.</p>
-      {recommendation.budgetRemaining!==null&&<p>Budget headroom: {money(recommendation.budgetRemaining)} below your limit.</p>}
-      {!!recommendation.explanations.length&&<ul>{recommendation.explanations.map(text=><li key={text}>{text}</li>)}</ul>}
-      {recommendation.score!==null&&<p>Preference/value score: {recommendation.score}/100. Weighted dimensions: affordability {recommendation.weights.affordability}%, facilities {recommendation.weights.facilities}%, area {recommendation.weights.area}%. Unrequested dimensions are omitted. Affordability = (budget − rent) / budget; facilities = matched / requested; area = 1 for a match, otherwise 0.</p>}
-      <p>This is deterministic matching of listed details, not AI, apartment quality, or ownership verification.</p>
+      <p>This home meets your required filters.{hasPreferences?' Your optional preferences help order these homes.':' Homes are ordered by affordability when you set a budget.'}</p>
+      {recommendation.components.facilities!==null&&<p>{recommendation.components.facilities===1?'Your optional facilities are listed.':'Some optional facilities are missing or not listed.'}</p>}
+      <p>Based on listed details. Confirm facilities and availability with the owner.</p>
     </details>
   </div>;
 }
@@ -44,7 +42,7 @@ export function QuoteComparison({offers,workers,onChoose,saving}) {
     <p className="small muted">Guidance only. Choose any offer; verified reliability data is unavailable.</p>
     {!ranked.length?<p>No valid pending quotations / বৈধ দর এখনো নেই</p>:ranked.map(row=>{
       const offer=offers.find(o=>o.id===row.id), worker=workers.find(w=>w.id===offer.workerId);
-      return <div className="offer" key={row.id}><div><strong>{worker?.name||'Independent mover / স্বতন্ত্র মুভার'}</strong><small>{worker?.sample?'Demo mover / ডেমো মুভার':`Service area / কাজের এলাকা: ${worker?.area||'Not specified / উল্লেখ নেই'}`}</small>
+      return <div className="offer" key={row.id}><div><strong>{worker?.name||'Independent mover / স্বতন্ত্র মুভার'}</strong><small>{`Service area / কাজের এলাকা: ${worker?.area||'Not specified / উল্লেখ নেই'}`}</small>
         <small className="offer-rating">No reviews yet / এখনো রিভিউ নেই</small>
         {row.recommended&&<strong className="small">Lowest quote{ranked.length===1?' · Only offer':''}</strong>}
         <small>{row.difference===0?'At the lowest quote':`${money(row.difference)} above the lowest quote`}</small>

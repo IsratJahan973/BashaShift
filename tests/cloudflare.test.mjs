@@ -56,7 +56,7 @@ test('default Mistral REST request uses multimodal messages, a sanitized JPEG da
     assert.doesNotMatch(submitted.body,/private customer notes|renter-session-fixture/);
     assert.equal(submitted.body.includes(openKey),false);
     for(const value of [cloudToken,account,openKey])assert.equal(JSON.stringify(data).includes(value),false);
-    const health=await(await fetch(url+'/api/health')).json();assert.equal(health.aiConfigured,true);assert.equal(health.aiDemoEnabled,false);
+    const health=await(await fetch(url+'/api/health')).json();assert.equal(health.aiConfigured,true);assert.equal(health.aiRequiresRenterLogin,true);
   });
 });
 

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { WandSparkles, X } from 'lucide-react';
 import { photoLimits,reviewInventory,scanFurniture } from '../lib/recognition.js';
 
-export default function FurnitureRecognition({ prepareImage,token,demoMode,onApply,onPendingChange }) {
+export default function FurnitureRecognition({ prepareImage,token,onApply,onPendingChange }) {
   const [photos,setPhotos]=useState([]);
   const [preparing,setPreparing]=useState(false);
   const [scanning,setScanning]=useState(false);
@@ -34,7 +34,7 @@ export default function FurnitureRecognition({ prepareImage,token,demoMode,onApp
     if(!photos.length || !consent || scanning || preparing)return;
     controller.current=new AbortController();setScanning(true);setSuggestions(null);setError('');setMessage('');
     try{
-      const items=await scanFurniture({ images:photos.map(photo=>photo.image),token,demoMode,signal:AbortSignal.any([controller.current.signal,AbortSignal.timeout(45000)]) });
+      const items=await scanFurniture({ images:photos.map(photo=>photo.image),token,signal:AbortSignal.any([controller.current.signal,AbortSignal.timeout(45000)]) });
       if(mounted.current){
         if(items.length)setSuggestions(items);
         else setMessage('No furniture was identified. Your existing inventory is unchanged; add items manually below.');

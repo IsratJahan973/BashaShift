@@ -28,5 +28,3 @@ services:
         value: "false"
       - key: OPENAI_MODEL
         value: gpt-4.1-mini
-      - key: AI_ALLOW_DEMO_SCAN
-        value: "false"

@@ -30,27 +30,22 @@ export function createApp({env=process.env,fetchImpl=outboundFetch,verifyRenter=
   app.use((_req,res,next)=>{res.set('X-Content-Type-Options','nosniff');next();});
   app.use('/api',(_req,res,next)=>{res.set('Cache-Control','no-store');next();});
   const recognizer=createFurnitureRecognizer({env,fetchImpl,timeoutMs,logScanFailure});
-  const demoAllowed=env.AI_ALLOW_DEMO_SCAN==='true'&&env.NODE_ENV==='development';
   const attempts=windowLimit(40,60000,clock),scans=windowLimit(scanLimit,60000,clock);
   let active=0;
-  app.get('/api/health',(_req,res)=>res.json({ok:true,aiConfigured:recognizer.configured,aiRequiresRenterLogin:!demoAllowed,aiDemoEnabled:demoAllowed}));
+  app.get('/api/health',(_req,res)=>res.json({ok:true,aiConfigured:recognizer.configured,aiRequiresRenterLogin:true}));
   app.post('/api/scan',async(req,res,next)=>{
     req.scanRequestId=randomUUID();res.set('X-Request-ID',req.scanRequestId);
     try{
       if(!recognizer.configured)throw new ScanError(503,'ai_not_configured','AI photo analysis is not configured here. Add items manually.');
       const retry=attempts(req.ip);
       if(retry){res.set('Retry-After',String(retry));throw new ScanError(429,'rate_limited','Too many attempts. Wait a minute or enter items manually.');}
-      const loopback=['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
-      if(demoAllowed&&loopback&&req.get('X-BashaShift-Demo')==='1')req.scanActor='demo:'+req.ip;
-      else{
-        const bearer=req.get('Authorization')?.match(/^Bearer ([A-Za-z0-9._~+/-]+=*)$/);
-        if(!bearer||bearer[1].length>8192)throw new ScanError(401,'sign_in_required','Sign in as a renter to analyze furniture photos.');
-        if(!verifyRenter)throw new ScanError(503,'account_service_unavailable','Account verification is unavailable. Manual inventory is still available.');
-        let actor;
-        try{actor=await verifyRenter(bearer[1]);}catch(error){if(error instanceof ScanError)throw error;throw new ScanError(503,'account_service_unavailable','Account verification is unavailable. Try again or enter items manually.');}
-        if(actor?.role!=='renter'||!actor.id)throw new ScanError(403,'renter_required','Photo analysis requires a renter account.');
-        req.scanActor=actor.id;
-      }
+      const bearer=req.get('Authorization')?.match(/^Bearer ([A-Za-z0-9._~+/-]+=*)$/);
+      if(!bearer||bearer[1].length>8192)throw new ScanError(401,'sign_in_required','Sign in as a renter to analyze furniture photos.');
+      if(!verifyRenter)throw new ScanError(503,'account_service_unavailable','Account verification is unavailable. Manual inventory is still available.');
+      let actor;
+      try{actor=await verifyRenter(bearer[1]);}catch(error){if(error instanceof ScanError)throw error;throw new ScanError(503,'account_service_unavailable','Account verification is unavailable. Try again or enter items manually.');}
+      if(actor?.role!=='renter'||!actor.id)throw new ScanError(403,'renter_required','Photo analysis requires a renter account.');
+      req.scanActor=actor.id;
       next();
     }catch(error){next(error);}
   },express.json({limit:'9mb',strict:true}),async(req,res,next)=>{

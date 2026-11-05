@@ -50,13 +50,7 @@ Missing keys, expired sessions, unavailable providers, and failed scans leave
 manual inventory usable. Incorrect Supabase public configuration intentionally
 fails the build; correct it instead of bypassing validation.
 
-For an **explicit local-only demonstration** without accounts, leave both
-Supabase public variables blank, set `NODE_ENV=development` and
-`AI_ALLOW_DEMO_SCAN=true`, and use the browser-local demo through loopback.
-The demo header is accepted only from loopback in development. This bypass is
-off by default and ignored in production. A public demo must use renter login
-to spend the backend key. A real scan still calls the configured provider and may incur charges;
-there is no production mock-response switch.
+All scans require an authenticated renter, including local development. No account bypass or production mock-response switch exists.
 
 ## Renter workflow
 
@@ -65,44 +59,22 @@ there is no production mock-response switch.
 3. Confirm permission to send photos to Cloudflare Workers AI (and optional OpenAI backup), then choose **Analyze photos**.
 4. Review the suggested categories, confidence, and quantities. Use 0 to remove
    mistakes. **Apply reviewed inventory** replaces the current list to avoid
-   counting the example items twice. Add missing items with the manual controls.
+   counting the same furniture twice. Add missing items with the manual controls.
    **Keep manual inventory** discards suggestions without changing the list.
 5. Set distance, floors, and lift availability. Check the itemized BDT estimate.
-6. Enter contact details and consent, then publish. Shared mode uses the existing
-   authorized `create_moving_request` transaction with the approved items and
-   estimate. Demo mode saves only in that browser and labels sample providers.
+6. Enter contact details and consent, then publish through the existing authorized
+   `create_moving_request` transaction. Approved inventory is saved; the illustrative
+   estimate is not stored as a mover quotation.
 7. Eligible movers may offer a price. Selection and phone confirmation remain
    separate actions; neither AI nor request submission creates a booking.
 
 ## Transparent illustrative pricing
 
-The existing pricing rates are preserved, now visible in the quote breakdown.
-They are demonstration assumptions, not verified Bangladesh market tariffs.
-
-| Item | Handling per item (BDT) |
-|---|---:|
-| Bed | 450 |
-| Sofa | 380 |
-| Refrigerator | 350 |
-| Wardrobe | 420 |
-| Dining table | 280 |
-| Washing machine | 300 |
-| Boxes | 70 |
-| Other | 180 |
-
-`subtotal = sum(quantity × handling rate) + 850 vehicle base + 45 × distance_km + stairs`
-
-`stairs = 0` when a working lift is accessible at **both** buildings; otherwise
-`100 × (origin floor + destination floor)`. Ground floor is 0. This intentionally
-simple model charges both floor counts if the checkbox is off; it does not
-model separate lift access at each address. Round the subtotal **up** to the
-next BDT 50. Empty inventory has no estimate. AI supplies no prices.
-
-Example: 3 beds + 5 boxes + 1 sofa = BDT 2,080 handling; 8 km = 360; floors 2
-and 3 without lifts = 500; vehicle = 850; subtotal 3,790 + rounding 10 =
-**BDT 3,800**. Packing, dismantling, truck size, narrow access, tolls, traffic,
-and timing can change a mover's offer. The renter approves the final agreement;
-the estimate is never a guaranteed moving price.
+The editable example assumptions remain base 850 BDT, 45/km, 150/effort unit,
+20/stair-floor × unit, workload 1 and range ±20%. These are illustrative inputs,
+not verified Bangladeshi market prices. The collapsed calculation shows the
+formula and effort units. Distance, floors, lift and approved inventory update
+the range automatically. Independent movers set their own final quotations.
 
 ## Photo and API safeguards
 
@@ -126,16 +98,17 @@ the estimate is never a guaranteed moving price.
 - Existing database contact rules stay in place. Unselected movers receive no
   customer phone, exact address, or private notes from this feature.
 
-## Verification and demo preparation
+## Verification
 
 Run `npm test`, `npm run build`, `npm run test:browser:ai`, and
 `npm run test:browser:auth-ui`. Browser tests need Python dependencies in
 `tests/requirements.txt` plus Chromium; set
 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` if using a system installation.
-The AI browser test builds an isolated demo fixture and uses **mocked Cloudflare**
-responses, never a real key. It exercises the real upload route and local
-moving-request journey. The shared request payload is separately tested with
-a mocked RPC; this does not establish hosted persistence.
+The AI browser test uses seven isolated authenticated browser contexts and real
+production SQL/RLS in embedded PostgreSQL, with **mocked Auth HTTP and Cloudflare**.
+It exercises sanitation, review, manual fallback, requests, independent quotations,
+selection, contact privacy and confirmation. This does not establish hosted
+Auth or live provider accuracy.
 
 ### Minimal live check after an owner-approved deployment
 

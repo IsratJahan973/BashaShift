@@ -7,8 +7,8 @@ import {
   Truck, UploadCloud, UserRound, Users, Wallet, WandSparkles, X, RotateCcw, CalendarCheck,
   Navigation, Copy, Image as ImageIcon, LocateFixed, LayoutDashboard, ShieldAlert, Star,
 } from 'lucide-react';
-import { areas, furniture, initialDb } from './data.js';
-import { addOffer, chooseOffer, declineAndReopen, matchesArea, money, phoneLink, safePhone, uid } from './domain.js';
+import { areas, furniture } from './data.js';
+import { matchesArea, money, phoneLink, safePhone } from './domain.js';
 import { isPasswordRecoveryPending, supabase, supabaseConfigurationError } from './lib/supabase.js';
 import { roles } from './lib/auth.js';
 import * as repository from './lib/repository.js';
@@ -20,11 +20,9 @@ import MovingSteps from './components/MovingSteps.jsx';
 import { ApartmentPreferences, ApartmentExplanation, QuoteComparison, defaultPreferences } from './components/Recommendations.jsx';
 import { rankApartments } from './lib/recommendations.js';
 
-const STORAGE = 'bashashift-prototype-v1';
 const dateAfter = () => new Date(Date.now()+86400000*10).toISOString().slice(0,10);
-const itemDefault = [{name:'Bed',qty:1},{name:'Sofa',qty:1},{name:'Boxes',qty:3}];
+const itemDefault = [];
 const areaName = a => /^bonosree$/i.test((a||'').trim()) ? 'Banasree' : (a||'').trim();
-const initial = () => { try { const raw=localStorage.getItem(STORAGE); if(raw) {const d=JSON.parse(raw); if(d?.listings&&d?.requests&&d?.workers&&d?.inquiries) return d;} } catch {} return initialDb(); };
 const inputClass = 'form-control';
 const fieldBangla = {
   'Moving from':'যেখান থেকে', 'Moving to':'যেখানে যাবেন', 'Moving date':'যাত্রার তারিখ',
@@ -57,8 +55,7 @@ function PropertyArt({listing, className=''}) {
       <path d="M0 249 Q84 229 176 249 T470 249 L470 290 L0 290Z" fill="#56786b" opacity=".18"/>
       <path d="M37 245q-30-33 1-74 30 42-1 74 M418 247q-33-35 0-83 29 45 0 83" fill="#5c9077" opacity=".55" />
     </svg>}
-    {listing.sample && <span className="image-tag">ILLUSTRATIVE DEMO</span>}
-    {!listing.sample && <span className="image-tag live-tag">USER LISTED · UNVERIFIED</span>}
+    <span className="image-tag live-tag">USER LISTED · UNVERIFIED</span>
   </div>;
 }
 function Badge({children,tone='neutral'}) {return <span className={`chip ${tone}`}>{children}</span>}
@@ -88,8 +85,8 @@ function MoverBookingCard({request, confirmed}) {
 }
 
 function MoverWorkspace({
-  demoMode, db, activeWorker, setDb, setAvailability, workerForm,
-  setWorkerForm, workerRegister, saving, workerQuote, setWorkerQuote, offer, go,
+  db, activeWorker, setAvailability, workerForm,
+  setWorkerForm, workerRegister, saving, workerQuote, setWorkerQuote, offer,
 }) {
   const availableJobs = db.requests.filter(request =>
     request.status === 'open' && matchesArea(activeWorker, request));
@@ -109,23 +106,16 @@ function MoverWorkspace({
       <div className="form-panel">
         <span className="eyebrow">MOVER ACCOUNT / মুভার অ্যাকাউন্ট</span>
         <h3>আপনার কাজের ড্যাশবোর্ড</h3>
-        {demoMode&&<SelectField label="ডেমো মুভার বাছুন" options={db.workers.map(worker=>({
-          label:worker.name+' · '+worker.area+(worker.sample?' (ডেমো)':''),
-          value:worker.id,
-        }))} value={activeWorker?.id||''} onChange={event=>
-          setDb(data=>({...data,selectedWorkerId:event.target.value}))}/>}
         {activeWorker&&<div className="worker-profile">
           <div className="avatar">{activeWorker.avatar}</div>
-          <div><strong>{activeWorker.name}</strong><small>{activeWorker.area} · {activeWorker.sample?'ডেমো অ্যাকাউন্ট':'পরিচয় যাচাই হয়নি'}</small></div>
+          <div><strong>{activeWorker.name}</strong><small>{activeWorker.area} · পরিচয় যাচাই হয়নি</small></div>
           <label className="switch"><input type="checkbox" checked={activeWorker.available}
             disabled={saving} onChange={event=>setAvailability(event.target.checked)}/>
             <span>{activeWorker.available?'কাজ নিতে প্রস্তুত':'এখন কাজ নেবেন না'}</span></label>
         </div>}
         <div className="panel-split"/>
         <details className="optional-details mover-profile-details" open={!activeWorker}><summary>Profile & service area · আপনার তথ্য</summary>
-        <p className="muted small">{demoMode
-          ? 'ডেমোতে মুভার যোগ করুন। / Add a mover to the demo.'
-          : 'কাজের এলাকা ও যোগাযোগের তথ্য বদলান। পরিচয় যাচাই করা হয়নি।'}</p>
+        <p className="muted small">কাজের এলাকা ও যোগাযোগের তথ্য বদলান। পরিচয় যাচাই করা হয়নি।</p>
         <form onSubmit={workerRegister}>
           <TextField label="আপনার নাম" placeholder="পুরো নাম" value={workerForm.name}
             onChange={event=>setWorkerForm(state=>({...state,name:event.target.value}))}/>
@@ -133,9 +123,9 @@ function MoverWorkspace({
             onChange={event=>setWorkerForm(state=>({...state,area:event.target.value}))}/>
           <TextField label="ফোন নম্বর" placeholder="01XXXXXXXXX" value={workerForm.phone}
             onChange={event=>setWorkerForm(state=>({...state,phone:event.target.value}))}/>
-          <button type="submit" aria-label={demoMode?'Register worker':'Save mover profile'}
+          <button type="submit" aria-label="Save mover profile"
             className="btn btn-primary btn-block" disabled={saving}>
-            <Plus size={16}/>{demoMode?'ডেমো মুভার যোগ করুন':'তথ্য সংরক্ষণ করুন'}
+            <Plus size={16}/>তথ্য সংরক্ষণ করুন
           </button>
         </form></details>
       </div>
@@ -146,9 +136,7 @@ function MoverWorkspace({
         </div>
         {availableJobs.length===0
           ? <Empty icon={Package} title="এখন নতুন কাজ নেই"
-              description="আপনার এলাকার নতুন অনুরোধ এখানে দেখবেন।"
-              action={demoMode&&<button className="btn btn-soft"
-                onClick={()=>go('moving')}>ডেমো অনুরোধ তৈরি করুন</button>}/>
+              description="আপনার এলাকার নতুন অনুরোধ এখানে দেখবেন।"/>
           : availableJobs.map(request=>{
             const prior=request.offers.find(item=>
               item.workerId===activeWorker?.id && item.status==='pending');
@@ -196,7 +184,7 @@ function MoverWorkspace({
 }
 
 function OwnerWorkspace({
-  demoMode, ownerTab, setOwnerTab, newProperty, newListing, setNewListing,
+  ownerTab, setOwnerTab, newProperty, newListing, setNewListing,
   publishListing, saving, editingProperty, setEditingProperty, ownerImage, ownerListingCount,
   ownerListings, removeListing, profile, db, acknowledge,
 }) {
@@ -239,7 +227,7 @@ function OwnerWorkspace({
               onChange={event=>setNewListing(state=>({...state,ownerName:event.target.value}))} required/>
             <TextField label="Bangladesh phone *" placeholder="01XXXXXXXXX"
               value={newListing.ownerPhone} onChange={event=>setNewListing(state=>({...state,ownerPhone:event.target.value}))}
-              required help={demoMode?'Stored only in this demo browser.':'Shared only with renters requesting a viewing.'}/>
+              required help="Shared only with renters requesting a viewing."/>
           </div>
           <div className="check-row">{[['lift','Lift'],['balcony','Balcony'],['parking','Parking']].map(([key,label])=>
             <label key={key} className="check-control">
@@ -257,7 +245,7 @@ function OwnerWorkspace({
           </label></details>
           <label className="upload-zone"><ImageIcon size={28}/>
             <strong>{newListing.image?'Photo ready — click to replace':'Add a property photo (optional)'}</strong>
-            <small>{demoMode?'JPG/PNG/WEBP; এই ব্রাউজারে থাকবে। / Stored in this browser.':'JPG/PNG/WEBP; বাসা প্রকাশের সময় আপলোড হবে। / Uploaded when you publish.'}</small>
+            <small>JPG/PNG/WEBP; বাসা প্রকাশের সময় আপলোড হবে। / Uploaded when you publish.</small>
             <input type="file" accept="image/*" onChange={ownerImage} hidden/>
           </label>
           <div className="form-footer">
@@ -271,17 +259,17 @@ function OwnerWorkspace({
         </form>
       </div>
       : <div className="dashboard-grid">
-        <div className="form-panel"><h3>{demoMode?'Locally published properties':'Your properties'} / আপনার বাসা</h3>
+        <div className="form-panel"><h3>Your properties / আপনার বাসা</h3>
           {ownerListings.length===0
             ? <Empty icon={Building2} title="এখনো কোনো বাসা নেই" description="নতুন বাসার তথ্য যোগ করুন।"
               action={<button className="btn btn-soft" onClick={newProperty}>বাসার তথ্য দিন</button>}/>
             : ownerListings.map(item=><div className="mini-entry" key={item.id}>
-              <div><strong>{item.title}</strong><small>{item.area} · {money(item.rent)}/mo{!demoMode&&` · ${item.status}`}</small></div>
-              {!demoMode&&<button className="btn btn-small btn-soft" onClick={()=>{
-                setNewListing({...item,ownerPhone:profile.phone});setEditingProperty(item.id);setOwnerTab('add');
-              }}>Edit / বদলান</button>}
+              <div><strong>{item.title}</strong><small>{item.area} · {money(item.rent)}/mo · {item.status}</small></div>
+              <button className="btn btn-small btn-soft" onClick={()=>{
+                setNewListing({...item,sqft:item.sqft||'',ownerPhone:profile.phone});setEditingProperty(item.id);setOwnerTab('add');
+              }}>Edit / বদলান</button>
               <button className="btn btn-small btn-danger-outline" disabled={saving}
-                onClick={()=>removeListing(item.id)}>{demoMode?'Remove / সরান':'Unpublish / সরান'}</button>
+                onClick={()=>removeListing(item.id)}>Unpublish / সরান</button>
             </div>)}
         </div>
         <div className="form-panel"><h3>Viewing requests / বাসা দেখার অনুরোধ</h3>
@@ -306,13 +294,10 @@ function OwnerWorkspace({
 
 function App() {
   const isRecoveryRedirect = new URLSearchParams(window.location.hash.slice(1)).get('type') === 'recovery';
-  // Hosted accounts are the only public mode. The legacy ?demo=1 URL must never bypass renter authentication.
-  const [demoMode,setDemoMode] = useState(false);
-  const [demoDb,setDb] = useState(initial);
   const auth = useAuth(supabase);
   const profile = auth.session?.user.id === auth.profile?.id ? auth.profile : null;
-  const cloud = useCloudData(supabase, profile, !demoMode, auth.session?.user.id);
-  const db = demoMode ? demoDb : cloud.data;
+  const cloud = useCloudData(supabase, profile, auth.session?.user.id);
+  const db = cloud.data;
   const [authDialog,setAuthDialog] = useState(() => isRecoveryRedirect ? 'reset' : null);
   const [saving,setSaving] = useState(false);
   const [editingProperty,setEditingProperty] = useState(null);
@@ -334,45 +319,43 @@ function App() {
   const [workerQuote,setWorkerQuote] = useState({});
   const [move,setMove] = useState({fromArea:'Banasree',toArea:'Banasree',date:dateAfter(),km:5,fromFloor:2,toFloor:2,hasLift:true,customerName:'',customerPhone:'',customerConsent:false,notes:'',items:itemDefault,listingId:null});
   const [aiPending,setAiPending] = useState(false);
-  const [requestCreated,setRequestCreated] = useState(false);
 
   useEffect(()=>{
     if(!supabase)return;
-    if(isPasswordRecoveryPending()){setDemoMode(false);setAuthDialog('reset');}
+    if(isPasswordRecoveryPending()){setAuthDialog('reset');}
     const {data:{subscription}}=supabase.auth.onAuthStateChange(event=>{
-      if(event==='PASSWORD_RECOVERY'){setDemoMode(false);setAuthDialog('reset');}
+      if(event==='PASSWORD_RECOVERY'){setAuthDialog('reset');}
     });
     return ()=>subscription.unsubscribe();
   },[]);
   useEffect(()=>{const url=new URL(window.location.href);if(url.searchParams.has('demo')){url.searchParams.delete('demo');window.history.replaceState(null,'',url);}},[]);
   useEffect(()=>{
-    const account = demoMode ? null : profile;
+    const account = profile;
     setListing(null); setEditingProperty(null); setOwnerTab('add'); setSaved([]);
     setAiPending(false); setPreferences(defaultPreferences);
     setNewListing({title:'',area:'Banasree',block:'',rent:'',beds:2,baths:1,sqft:'',floor:1,lift:false,balcony:false,parking:false,ownerName:account?.display_name||'',ownerPhone:account?.phone||'',description:'',available:dateAfter(),image:''});
     setInquiry({name:account?.display_name||'',phone:account?.phone||'',date:dateAfter(),message:''});
     setMove({fromArea:'Banasree',toArea:'Banasree',date:dateAfter(),km:5,fromFloor:2,toFloor:2,hasLift:true,customerName:account?.display_name||'',customerPhone:account?.phone||'',customerConsent:false,notes:'',items:itemDefault,listingId:null});
     setWorkerForm({name:account?.display_name||'',area:account?.service_area||'Banasree',phone:account?.phone||''});
-  },[demoMode,profile?.id]);
-  function requireRole(role){if(demoMode)return true;if(!profile){setAuthDialog(role);return false;}if(profile.role!==role){notify(`Use a ${roles[role]} account for this action.`);return false;}return true;}
+  },[profile?.id]);
+  function requireRole(role){if(!profile){setAuthDialog(role);return false;}if(profile.role!==role){notify(`Use a ${roles[role]} account for this action.`);return false;}return true;}
   async function onlineAction(action,message){if(saving)return false;setSaving(true);try{await action();await cloud.refresh();if(message)notify(message);return true;}catch(error){notify(error.message);return false;}finally{setSaving(false);}}
   async function signOut(){try{await repository.result(supabase.auth.signOut());go('explore');}catch(error){notify(error.message);}}
   function accountGate(role){return <section className="container workspace"><div className="form-panel"><h2>{auth.loading?'Loading your account…':`${roles[role]} / ${role==='owner'?'বাড়ির মালিক':role==='mover'?'সেবাদানকারী':'ভাড়াটিয়া'} account required`}</h2><p>{profile?`You are signed in as ${roles[profile.role]}. Switch accounts to use this workspace. / এই কাজের জন্য সঠিক অ্যাকাউন্টে লগ ইন করুন।`:'Sign in or create an account to save your information across devices. / তথ্য সংরক্ষণ করতে লগ ইন বা অ্যাকাউন্ট খুলুন।'}</p><button className="btn btn-primary" disabled={auth.loading} onClick={async()=>{if(auth.session)await signOut();setAuthDialog(role);}}>{profile?'Switch account / অ্যাকাউন্ট বদলান':'Sign in or register / লগ ইন বা নিবন্ধন'}</button></div></section>;}
   function notify(message){setToast(message);window.clearTimeout(notify.timer);notify.timer=window.setTimeout(()=>setToast(''),4300)}
   function go(p){setPage(p);setListing(null);setMobileNav(false);window.scrollTo({top:0,behavior:'smooth'})}
-  function save(id){setSaved(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id])}
-  function newProperty(){setEditingProperty(null);setNewListing({title:'',area:'Banasree',block:'',rent:'',beds:2,baths:1,sqft:'',floor:1,lift:false,balcony:false,parking:false,ownerName:!demoMode?profile?.display_name||'':'',ownerPhone:!demoMode?profile?.phone||'':'',description:'',available:dateAfter(),image:''});setOwnerTab('add');}
+  function save(id){if(!requireRole('renter'))return;setSaved(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id])}
+  function newProperty(){setEditingProperty(null);setNewListing({title:'',area:'Banasree',block:'',rent:'',beds:2,baths:1,sqft:'',floor:1,lift:false,balcony:false,parking:false,ownerName:profile?.display_name||'',ownerPhone:profile?.phone||'',description:'',available:dateAfter(),image:''});setOwnerTab('add');}
   const filtered = useMemo(()=>db.listings.filter(x=>{
     const q=areaName(search).toLowerCase();
     const places = `${x.title} ${x.area} ${x.block}`.toLowerCase();
-    return (demoMode||x.status==='published')&&(!q||places.includes(q))&&(!area||x.area===area)&&(!maxRent||Number(x.rent)<=Number(maxRent))&&(!minBeds||Number(x.beds)>=Number(minBeds));
-  }),[db.listings,search,area,maxRent,minBeds,demoMode]);
+    return (x.status==='published')&&(!q||places.includes(q))&&(!area||x.area===area)&&(!maxRent||Number(x.rent)<=Number(maxRent))&&(!minBeds||Number(x.beds)>=Number(minBeds));
+  }),[db.listings,search,area,maxRent,minBeds]);
   const apartmentRanking = useMemo(()=>rankApartments(filtered,{...preferences,maxBudget:maxRent,minBeds,requiredArea:area}),[filtered,preferences,maxRent,minBeds,area]);
-  const shownListings = demoMode ? filtered : apartmentRanking.map(row=>filtered.find(p=>p.id===row.id));
-  const activeWorker = db.workers.find(w=>w.id===db.selectedWorkerId)||db.workers[0];
-  const ownerListings = db.listings.filter(x=>!x.sample&&(demoMode||x.owner_id===profile?.id));
+  const shownListings = apartmentRanking.map(row=>filtered.find(p=>p.id===row.id));
+  const activeWorker = db.workers.find(w=>w.id===profile?.id);
+  const ownerListings = db.listings.filter(x=>!x.sample&&x.owner_id===profile?.id);
   const ownerListingCount = ownerListings.length;
-  const selectedReq = id=>db.requests.find(r=>r.id===id);
   const navItems = [
     {key:'explore',english:'Explore homes',bangla:'ঘর খুঁজুন'},
     {key:'moving',english:'Moving services',bangla:'মুভিং সেবা'},
@@ -380,7 +363,7 @@ function App() {
     {key:'owner',english:'Owner desk',bangla:'মালিকের ড্যাশবোর্ড'},
     {key:'worker',english:'Mover desk',bangla:'মুভারের ড্যাশবোর্ড'},
   ];
-  const visibleNav = demoMode ? navItems : [
+  const visibleNav = [
     navItems[0],
     ...(profile?.role==='renter' ? [navItems[1],navItems[2]] : []),
     ...(profile?.role==='owner' ? [navItems[3]] : []),
@@ -392,81 +375,81 @@ function App() {
     const dashboard={owner:'owner',renter:'activity',mover:'worker'};
     go(dashboard[role]||'explore');
   }
-  function planMove(l){if(!requireRole('renter'))return;setMove(old=>({...old,toArea:l.area,toFloor:l.floor,hasLift:l.lift,listingId:l.id}));setRequestCreated(false);go('moving');notify('Destination filled from selected home.');}
+  function planMove(l){if(!requireRole('renter'))return;setMove(old=>({...old,toArea:l.area,toFloor:l.floor,hasLift:l.lift,listingId:l.id}));go('moving');notify('Destination filled from selected home.');}
   async function imageToData(file,maxWidth=1100){
     if(!file||!file.type.startsWith('image/'))throw new Error('Please select an image.');
     if(file.size>8_000_000)throw new Error('File too large (8 MB maximum).');
     const url=URL.createObjectURL(file);
     try { const img=await new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=()=>reject(new Error('Could not load image.'));image.src=url;}); const c=document.createElement('canvas'); const s=Math.min(1,maxWidth/Math.max(img.width,img.height));c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);c.getContext('2d').drawImage(img,0,0,c.width,c.height);return c.toDataURL('image/jpeg',.78); } finally {URL.revokeObjectURL(url)}
   }
-  async function ownerImage(e){const file=e.target.files?.[0];if(!file)return;try{const image=await imageToData(file,800);setNewListing(x=>({...x,image}));notify(demoMode?'Photo attached (stored only in this browser).':'Photo ready to upload when you publish.')}catch(err){notify(err.message)}}
+  async function ownerImage(e){const file=e.target.files?.[0];if(!file)return;try{const image=await imageToData(file,800);setNewListing(x=>({...x,image}));notify('Photo ready to upload when you publish.')}catch(err){notify(err.message)}}
   async function publishListing(e){e.preventDefault();if(!requireRole('owner'))return;if(!newListing.title.trim()||!newListing.block.trim()||!newListing.ownerName.trim()||!safePhone(newListing.ownerPhone)||Number(newListing.rent)<1000){notify('Check the required fields and valid 11-digit phone number.');return}
-    if(!demoMode){const ok=await onlineAction(()=>repository.saveProperty(supabase,profile,newListing,editingProperty),'Your property is published.');if(ok){setEditingProperty(null);setOwnerTab('manage');setNewListing(s=>({...s,title:'',block:'',rent:'',image:'',description:''}));await auth.refreshProfile();}return;}
-    const obj={...newListing,id:uid('home'),sample:false,ownerPhone:newListing.ownerPhone.replace(/\D/g,''),rent:Number(newListing.rent),beds:Number(newListing.beds),baths:Number(newListing.baths),sqft:Number(newListing.sqft)||0,floor:Number(newListing.floor),tone:'sage'};
-    setDb(d=>({...d,listings:[obj,...d.listings]}));setNewListing({title:'',area:'Banasree',block:'',rent:'',beds:2,baths:1,sqft:'',floor:1,lift:false,balcony:false,parking:false,ownerName:'',ownerPhone:'',description:'',available:dateAfter(),image:''});setOwnerTab('manage');notify('Your listing is published locally (not public yet).')
+    const ok=await onlineAction(()=>repository.saveProperty(supabase,profile,newListing,editingProperty),'Your property is published.');
+    if(ok){setEditingProperty(null);setOwnerTab('manage');setNewListing(s=>({...s,title:'',block:'',rent:'',image:'',description:''}));await auth.refreshProfile();}
   }
-  async function requestVisit(e){e.preventDefault();if(!requireRole('renter'))return;if(!listing||!inquiry.name.trim()||!safePhone(inquiry.phone)){notify('Enter your name and a valid Bangladesh phone number.');return}
-    if(!demoMode){const ok=await onlineAction(()=>repository.createInquiry(supabase,listing.id,inquiry),'Viewing inquiry sent to the owner.');if(ok){setListing(null);go('activity');}return;}
-    setDb(d=>({...d,inquiries:[{id:uid('inq'),listingId:listing.id,listingTitle:listing.title,ownerName:listing.ownerName,name:inquiry.name,phone:inquiry.phone,date:inquiry.date,message:inquiry.message,status:'requested',createdAt:new Date().toISOString()},...d.inquiries]}));setListing(null);setInquiry({name:'',phone:'',date:dateAfter(),message:''});notify('Viewing request saved in demo dashboard.');go('activity')
+  async function requestVisit(e){e.preventDefault();if(!requireRole('renter'))return;if(!listing||!inquiry.name.trim()||!safePhone(inquiry.phone)){notify('Enter your name and a valid Bangladesh phone number.');return;}
+    const ok=await onlineAction(()=>repository.createInquiry(supabase,listing.id,inquiry),'Viewing inquiry sent to the owner.');if(ok){setListing(null);go('activity');}
   }
   function setItemQty(name,delta){setMove(s=>{let items=s.items.map(i=>i.name===name?{...i,qty:Math.max(0,i.qty+delta)}:i);if(!items.some(i=>i.name===name)&&delta>0)items=[...items,{name,qty:delta}];return {...s,items:items.filter(x=>x.qty>0)};})}
-  async function createRequest(e){e.preventDefault();if(!requireRole('renter'))return;if(aiPending){notify('Review or discard the photo suggestions before publishing.');return;}if(!move.items.some(x=>x.qty>0)||!move.customerName.trim()||!safePhone(move.customerPhone)||!move.customerConsent||!move.date){notify('Add furniture, valid contact details, and contact-sharing consent.');return}
-    if(!demoMode){const ok=await onlineAction(()=>repository.createMove(supabase,move),'Moving request published. Waiting for mover quotations.');if(ok)go('activity');return;}
-    const req={id:uid('move'),...move,customerPhone:move.customerPhone.replace(/\D/g,''),items:move.items.map(i=>({...i})),estimate:0,offers:[],status:'open',selectedOfferId:null,sample:false,createdAt:new Date().toISOString()};setDb(d=>({...d,requests:[req,...d.requests]}));setRequestCreated(true);notify('Request published locally. Switch to mover view to respond.');go('activity'); }
-  async function workerRegister(e){e.preventDefault();if(!requireRole('mover'))return;if(!workerForm.name.trim()||!safePhone(workerForm.phone)){notify('Enter name and valid Bangladesh phone number.');return}
-    if(!demoMode){await onlineAction(async()=>{await repository.saveProfile(supabase,profile.id,{display_name:workerForm.name.trim(),phone:workerForm.phone.replace(/\D/g,''),service_area:workerForm.area});await auth.refreshProfile();},'Mover profile saved.');return;}
-    const w={id:uid('worker'),name:workerForm.name.trim(),area:workerForm.area,phone:workerForm.phone.replace(/\D/g,''),sample:false,skills:['Moving'],available:true,avatar:workerForm.name.split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase()};setDb(d=>({...d,workers:[...d.workers,w],selectedWorkerId:w.id}));setWorkerForm({name:'',area:'Banasree',phone:''});notify('Worker created locally. Identity not verified.'); }
-  function updateRequest(id, updater){let error='';setDb(d=>({...d,requests:d.requests.map(req=>{if(req.id!==id)return req;try{return updater(req)}catch(err){error=err.message;return req}})}));if(error)notify(error)}
-  async function offer(req){if(!requireRole('mover'))return;const entered=workerQuote[req.id];const amount=Number(entered);if(!entered||!Number.isFinite(amount)||amount<100||amount>500000){notify('Enter your quotation between BDT 100 and BDT 500,000.');return;}if(!demoMode){await onlineAction(()=>repository.sendOffer(supabase,req.id,amount),'Quotation submitted. Customer can compare and select you.');return;}try{const updated=addOffer(req,activeWorker,amount);setDb(d=>({...d,requests:d.requests.map(r=>r.id===req.id?updated:r)}));notify('Quotation submitted. Customer can compare and select you.')}catch(err){notify(err.message)} }
-  async function choose(req,id){if(!requireRole('renter'))return;if(!demoMode){await onlineAction(()=>repository.selectOffer(supabase,id),'Mover selected. Call before confirming the booking.');return;}try{const updated=chooseOffer(req,id);setDb(d=>({...d,requests:d.requests.map(r=>r.id===req.id?updated:r)}));notify('Worker selected. Call to confirm before final booking.')}catch(err){notify(err.message)} }
-  async function removeListing(id){if(demoMode){setDb(d=>({...d,listings:d.listings.filter(x=>x.id!==id),inquiries:d.inquiries.filter(x=>x.listingId!==id)}));notify('Listing removed.');}else await onlineAction(()=>repository.archiveProperty(supabase,id),'Property unpublished. Existing inquiries are retained.');}
-  async function acknowledge(inquiry){if(demoMode)setDb(d=>({...d,inquiries:d.inquiries.map(x=>x.id===inquiry.id?{...x,status:x.status==='requested'?'acknowledged':'requested'}:x)}));else await onlineAction(()=>repository.acknowledgeInquiry(supabase,inquiry),'Inquiry updated.');}
-  async function setAvailability(available){if(demoMode)setDb(d=>({...d,workers:d.workers.map(w=>w.id===activeWorker.id?{...w,available}:w)}));else await onlineAction(async()=>{await repository.saveProfile(supabase,profile.id,{is_available:available});await auth.refreshProfile();},'Availability updated.');}
-  async function confirmRequest(id){if(demoMode)updateRequest(id,r=>({...r,status:'confirmed'}));else await onlineAction(()=>repository.confirmBooking(supabase,id),'Booking confirmed by you after your phone call.');}
-  async function declineRequest(id){if(demoMode)updateRequest(id,declineAndReopen);else await onlineAction(()=>repository.reopenRequest(supabase,id),'Request reopened. Contact is no longer shared with the declined mover.');}
+  async function createRequest(e){e.preventDefault();if(!requireRole('renter'))return;if(aiPending){notify('Review or discard the photo suggestions before publishing.');return;}if(!move.items.some(x=>x.qty>0)||!move.customerName.trim()||!safePhone(move.customerPhone)||!move.customerConsent||!move.date){notify('Add furniture, valid contact details, and contact-sharing consent.');return;}
+    const ok=await onlineAction(()=>repository.createMove(supabase,move),'Moving request published. Waiting for mover quotations.');if(ok)go('activity');
+  }
+  async function workerRegister(e){e.preventDefault();if(!requireRole('mover'))return;if(!workerForm.name.trim()||!safePhone(workerForm.phone)){notify('Enter name and valid Bangladesh phone number.');return;}
+    await onlineAction(async()=>{await repository.saveProfile(supabase,profile.id,{display_name:workerForm.name.trim(),phone:workerForm.phone.replace(/\D/g,''),service_area:workerForm.area});await auth.refreshProfile();},'Mover profile saved.');
+  }
+  async function offer(req){if(!requireRole('mover'))return;const entered=workerQuote[req.id];const amount=Number(entered);if(!entered||!Number.isFinite(amount)||amount<100||amount>500000){notify('Enter your quotation between BDT 100 and BDT 500,000.');return;}
+    await onlineAction(()=>repository.sendOffer(supabase,req.id,amount),'Quotation submitted. Customer can compare and select you.');
+  }
+  async function choose(req,id){if(!requireRole('renter'))return;await onlineAction(()=>repository.selectOffer(supabase,id),'Mover selected. Call before confirming the booking.');}
+  async function removeListing(id){if(!requireRole('owner'))return;await onlineAction(()=>repository.archiveProperty(supabase,id),'Property unpublished. Existing inquiries are retained.');}
+  async function acknowledge(inquiry){if(!requireRole('owner'))return;await onlineAction(()=>repository.acknowledgeInquiry(supabase,inquiry),'Inquiry updated.');}
+  async function setAvailability(available){if(!requireRole('mover'))return;await onlineAction(async()=>{await repository.saveProfile(supabase,profile.id,{is_available:available});await auth.refreshProfile();},'Availability updated.');}
+  async function confirmRequest(id){if(!requireRole('renter'))return;await onlineAction(()=>repository.confirmBooking(supabase,id),'Booking confirmed by you after your phone call.');}
+  async function declineRequest(id){if(!requireRole('renter'))return;await onlineAction(()=>repository.reopenRequest(supabase,id),'Request reopened. Contact is no longer shared with the declined mover.');}
   const currentListing = listing && db.listings.find(x=>x.id===listing.id);
   return <div className="app-shell" data-bangla={showBangla}>
     <header className="site-header"><div className="header-inner container"><button className="brand" onClick={()=>go('explore')} aria-label="BashaShift home"><span className="brand-logo"><House size={21} strokeWidth={2.6}/><MoveRight size={13} strokeWidth={3}/></span><span>Basha<span>Shift</span><small>Home to home, made simple.</small></span></button>
       <nav className={`top-nav ${mobileNav?'open':''}`} aria-label="Main navigation">{visibleNav.map(item=><button key={item.key} aria-label={`${item.english}${item.key==='activity'&&db.requests.length>0?` ${db.requests.length}`:''}`} className={page===item.key?'active':''} onClick={()=>go(item.key)}><span>{item.english}{item.key==='activity'&&db.requests.length>0&&<span className="count-dot">{db.requests.length}</span>}</span><small lang="bn">{item.bangla}</small></button>)}</nav>
       <div className="header-actions"><button type="button" className="language-toggle" aria-label="Show Bangla labels" aria-pressed={showBangla} onClick={()=>setShowBangla(value=>!value)}>বাংলা</button>{supabase&&<div className="auth-actions">{auth.session?<button className="btn btn-small btn-soft" aria-label="Sign out" disabled={saving} onClick={signOut}>Sign out</button>:<button className="btn btn-small btn-primary" aria-label="Sign in" disabled={auth.loading} onClick={()=>setAuthDialog('renter')}>Sign in</button>}</div>}<button className="mobile-menu" onClick={()=>setMobileNav(x=>!x)} aria-label="Toggle navigation / মেনু"><Menu size={23}/></button></div></div></header>
     <main>
-      {!demoMode&&<div className="container cloud-status"><span>{auth.loading?'Loading your account…':profile?profile.display_name:'Find your next home.'}</span><button className="btn btn-small btn-outline" aria-label="Refresh listings" disabled={cloud.loading||saving} onClick={cloud.refresh}>{cloud.loading?'Loading…':'Refresh listings'}</button>{saving&&<span role="status">Saving…</span>}</div>}
-      {(cloud.error||auth.error)&&!demoMode&&<div className="container"><div role="alert" className="inline-alert">{auth.error||cloud.error}</div></div>}
-      {supabaseConfigurationError&&<div className="container"><div role="alert" className="inline-alert">Online accounts are unavailable on this installation. The labeled demo remains available.</div></div>}
+      <div className="container cloud-status"><span>{auth.loading?'Loading your account…':profile?profile.display_name:'Find your next home.'}</span><button className="btn btn-small btn-outline" aria-label="Refresh listings" disabled={cloud.loading||saving} onClick={cloud.refresh}>{cloud.loading?'Loading…':'Refresh listings'}</button>{saving&&<span role="status">Saving…</span>}</div>
+      {(cloud.error||auth.error)&&<div className="container"><div role="alert" className="inline-alert">{auth.error||cloud.error}</div></div>}
+      {(!supabase||supabaseConfigurationError)&&<div className="container"><div role="alert" className="inline-alert">Listings and accounts are temporarily unavailable. Please try again later.</div></div>}
 
       {page==='explore'&&<>
-        <section className="hero"><div className="container hero-grid"><div className="hero-copy"><span className="hero-kicker"><span>✦</span> ONE JOURNEY. ZERO EXTRA HASSLE.</span><h1>Your Next Home.<br/>Your Next Move.<br/><em>Skip the Chaos.</em></h1><p>Discover rentals, connect with owners, and arrange your move — all in one calm place built for Bangladesh.</p><div className="hero-actions"><button className="btn btn-primary" onClick={()=>document.getElementById('homes')?.scrollIntoView({behavior:'smooth'})}>Find a home <ArrowRight size={17}/></button><button className="btn btn-outline" aria-label="Plan a move" onClick={()=>go('moving')}><Truck size={17}/> Plan a move</button></div><div className="hero-search"><Search size={20}/><input aria-label="Search rental locations" placeholder="Try Banasree, Mirpur, Dhanmondi…" value={search} onChange={e=>setSearch(e.target.value)} onKeyDown={e=>e.key==='Enter'&&document.getElementById('homes')?.scrollIntoView({behavior:'smooth'})}/></div><div className="hero-highlights"><span><CheckCircle2 size={17}/> Direct owner inquiries</span><span><CheckCircle2 size={17}/> One-tap mover requests</span></div></div><div className="hero-art" aria-hidden="true"><div className="hero-orb orb-one"/><div className="hero-orb orb-two"/><div className="hero-building back"><span className="roof"/><span className="window"/><span className="window"/><span className="window"/><span className="window"/></div><div className="hero-building front"><span className="roof"/><span className="window"/><span className="window"/><span className="window"/><span className="window"/><span className="door"/></div><div className="hero-truck"><Truck size={35}/></div><div className="float-note"><span><KeyRound size={16}/></span><div><strong>Find it. Love it. Move in.</strong><small>One connected journey</small></div></div></div></div></section>
-        <section className="container listings-section" id="homes"><SectionTitle eyebrow="EXPLORE HOMES" title="Find your next home" desc={demoMode?"Start with sample listings, or publish your own property in Owner Desk.":"Browse published rentals shared by property owners."} action={<Badge tone="light">{shownListings.length} homes shown</Badge>}/><div className="filters"><div className="filter-field filter-search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Area, building, keyword" aria-label="Search homes"/></div><div className="filter-field"><MapPin size={17}/><select aria-label="Area" value={area} onChange={e=>setArea(e.target.value)}><option value="">All areas</option>{areas.map(x=><option key={x}>{x}</option>)}</select></div><label className="filter-field budget-filter"><Wallet size={17}/><input aria-label="Maximum monthly rent" type="number" min="1" max="10000000" placeholder="Max rent (BDT)" value={maxRent} onChange={e=>setMaxRent(e.target.value)}/></label><div className="filter-field"><BedDouble size={17}/><select aria-label="Minimum bedrooms" value={minBeds} onChange={e=>setMinBeds(e.target.value)}><option value="">Any bedrooms</option>{[1,2,3,4].map(x=><option key={x} value={x}>{x}+ beds</option>)}</select></div><button className="btn btn-outline clear-button" onClick={()=>{setSearch('');setArea('');setMaxRent('');setMinBeds('');setPreferences(defaultPreferences)}}><RotateCcw size={15}/> Reset</button></div>
-          <p className="disclaimer"><Info size={15}/> {demoMode?'Sample homes are fictional, not available for rent. User-added listings are unverified and stored only in this browser.':'These are owner-published listings. Ownership and availability are unverified; discuss details with the owner before making plans.'}</p>
-          {!demoMode&&<ApartmentPreferences value={preferences} onChange={setPreferences}/>}
-          {!demoMode&&cloud.loading&&!shownListings.length&&<p role="status">Loading rentals / বাসার তালিকা লোড হচ্ছে…</p>}
-          <div className="homes-grid">{shownListings.map(x=><div className="recommended-home" key={x.id}><ListingCard listing={x} onOpen={setListing} onMove={planMove} canMove={demoMode||!profile||profile.role==='renter'} saved={saved.includes(x.id)} onSave={save}/>{!demoMode&&<ApartmentExplanation recommendation={apartmentRanking.find(row=>row.id===x.id)} listing={x}/>}</div>)}</div>{shownListings.length===0&&!cloud.loading&&<Empty icon={Search} title="No matching homes" description="Try another area, budget, or preference." action={<button aria-label="Clear filters" className="btn btn-soft" onClick={()=>{setArea('');setSearch('');setMaxRent('');setMinBeds('');setPreferences(defaultPreferences)}}>Clear filters</button>}/>}</section>
-        <section className="container workflow-section"><SectionTitle eyebrow="HOW IT WORKS" title="From house-hunting to moving day." desc="Find a home, plan your inventory, compare independent movers."/><div className="workflow-grid"><div><span>01</span><Search size={24}/><h3>Find your place</h3><p>Request a viewing from the owner.</p></div><div><span>02</span><Package size={24}/><h3>Plan your move</h3><p>Scan furniture with AI, review it, and plan a budget.</p></div><div><span>03</span><Phone size={24}/><h3>Compare & confirm</h3><p>Choose a mover’s quote and confirm by phone.</p></div></div></section>
-        {(demoMode||!profile||profile.role==='owner')&&<section className="container end-banner"><div><span className="eyebrow">HAVE A PROPERTY TO RENT?</span><h2>Make your empty place someone's next chapter.</h2><p>Publish an apartment with its details and photos.</p></div><button className="btn btn-light" aria-label="List your property" onClick={()=>demoMode||profile?go('owner'):setAuthDialog('owner')}>List your property <ArrowRight size={17}/></button></section>}
+        <section className="hero"><div className="container hero-grid"><div className="hero-copy"><span className="hero-kicker"><span>✦</span> ONE JOURNEY. ZERO EXTRA HASSLE.</span><h1>Your Next Home.<br/>Your Next Move.<br/><em>Skip the Chaos.</em></h1><p>Discover rentals, connect with owners, and arrange your move — all in one calm place built for Bangladesh.</p><div className="hero-actions"><button className="btn btn-primary" onClick={()=>document.getElementById('homes')?.scrollIntoView({behavior:'smooth'})}>Find a Home <ArrowRight size={17}/></button><button className="btn btn-outline" aria-label="Plan a move" onClick={()=>go('moving')}><Truck size={17}/> Plan a Move</button></div><div className="hero-search"><Search size={20}/><input aria-label="Search rental locations" placeholder="Try Banasree, Mirpur, Dhanmondi…" value={search} onChange={e=>setSearch(e.target.value)} onKeyDown={e=>e.key==='Enter'&&document.getElementById('homes')?.scrollIntoView({behavior:'smooth'})}/></div><div className="hero-highlights"><span><CheckCircle2 size={17}/> Direct owner inquiries</span><span><CheckCircle2 size={17}/> One-tap mover requests</span></div></div><div className="hero-art" aria-hidden="true"><div className="hero-orb orb-one"/><div className="hero-orb orb-two"/><div className="hero-building back"><span className="roof"/><span className="window"/><span className="window"/><span className="window"/><span className="window"/></div><div className="hero-building front"><span className="roof"/><span className="window"/><span className="window"/><span className="window"/><span className="window"/><span className="door"/></div><div className="hero-truck"><Truck size={35}/></div><div className="float-note"><span><KeyRound size={16}/></span><div><strong>Find it. Love it. Move in.</strong><small>One connected journey</small></div></div></div></div></section>
+        <section className="container workflow-section"><SectionTitle eyebrow="HOW IT WORKS" title="From house-hunting to moving day"/><div className="workflow-grid"><div><span>01</span><Search size={24}/><h3>Find a home</h3><p>Request a viewing from the owner.</p></div><div><span>02</span><Package size={24}/><h3>Scan and plan</h3><p>Scan furniture, review your list, see an estimate.</p></div><div><span>03</span><Phone size={24}/><h3>Compare movers</h3><p>Choose a quote and confirm by phone.</p></div></div></section>
+        <section className="container listings-section" id="homes"><SectionTitle eyebrow="EXPLORE HOMES" title="Find your next home" desc="Browse published rentals shared by property owners." action={<Badge tone="light">{shownListings.length} homes shown</Badge>}/><div className="filters"><div className="filter-field filter-search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Area, building, keyword" aria-label="Search homes"/></div><div className="filter-field"><MapPin size={17}/><select aria-label="Area" value={area} onChange={e=>setArea(e.target.value)}><option value="">All areas</option>{areas.map(x=><option key={x}>{x}</option>)}</select></div><label className="filter-field budget-filter"><Wallet size={17}/><input aria-label="Maximum monthly rent" type="number" min="1" max="10000000" placeholder="Max rent (BDT)" value={maxRent} onChange={e=>setMaxRent(e.target.value)}/></label><div className="filter-field"><BedDouble size={17}/><select aria-label="Minimum bedrooms" value={minBeds} onChange={e=>setMinBeds(e.target.value)}><option value="">Any bedrooms</option>{[1,2,3,4].map(x=><option key={x} value={x}>{x}+ beds</option>)}</select></div><button className="btn btn-outline clear-button" onClick={()=>{setSearch('');setArea('');setMaxRent('');setMinBeds('');setPreferences(defaultPreferences)}}><RotateCcw size={15}/> Reset</button></div>
+          <p className="disclaimer"><Info size={15}/> Owner-published listings. Confirm availability and details with the owner.</p>
+          <ApartmentPreferences value={preferences} onChange={setPreferences}/>
+          {cloud.loading&&!shownListings.length&&<p role="status">Loading rentals / বাসার তালিকা লোড হচ্ছে…</p>}
+          <div className="homes-grid">{shownListings.map(x=><div className="recommended-home" key={x.id}><ListingCard listing={x} onOpen={setListing} onMove={planMove} canMove={!profile||profile.role==='renter'} saved={saved.includes(x.id)} onSave={save}/><ApartmentExplanation recommendation={apartmentRanking.find(row=>row.id===x.id)} listing={x}/></div>)}</div>{shownListings.length===0&&!cloud.loading&&<Empty icon={Search} title="No matching homes" description="Try another area, budget, or preference." action={<button aria-label="Clear filters" className="btn btn-soft" onClick={()=>{setArea('');setSearch('');setMaxRent('');setMinBeds('');setPreferences(defaultPreferences)}}>Clear filters</button>}/>}</section>
+
+        {(!profile||profile.role==='owner')&&<section className="container end-banner"><div><span className="eyebrow">HAVE A PROPERTY TO RENT?</span><h2>Make your empty place someone's next chapter.</h2><p>Publish an apartment with its details and photos.</p></div><button className="btn btn-light" aria-label="List your property" onClick={()=>profile?go('owner'):setAuthDialog('owner')}>List your property <ArrowRight size={17}/></button></section>}
       </>}
-      {page==='owner'&&(!demoMode&&profile?.role!=='owner'?accountGate('owner'):<OwnerWorkspace
-        demoMode={demoMode} ownerTab={ownerTab} setOwnerTab={setOwnerTab} newProperty={newProperty}
+      {page==='owner'&&(profile?.role!=='owner'?accountGate('owner'):<OwnerWorkspace
+        ownerTab={ownerTab} setOwnerTab={setOwnerTab} newProperty={newProperty}
         newListing={newListing} setNewListing={setNewListing} publishListing={publishListing}
         saving={saving} editingProperty={editingProperty} setEditingProperty={setEditingProperty}
         ownerImage={ownerImage} ownerListingCount={ownerListingCount} ownerListings={ownerListings}
         removeListing={removeListing} profile={profile} db={db} acknowledge={acknowledge}/>)}
-      {page==='moving'&&(!demoMode&&profile?.role!=='renter'?accountGate('renter'):<section className="container workspace"><LayoutTitle title="Plan your move" desc="Route, furniture, then an estimate. Your mover sets the final price." icon={Truck}/><div className="move-layout"><MovingSteps key={demoMode?'demo':profile?.id} onSubmit={createRequest} pending={aiPending} items={move.items}>
+      {page==='moving'&&(profile?.role!=='renter'?accountGate('renter'):<section className="container workspace"><LayoutTitle title="Plan your move" desc="Route, furniture, then an estimate. Your mover sets the final price." icon={Truck}/><div className="move-layout"><MovingSteps key={profile?.id} onSubmit={createRequest} pending={aiPending} items={move.items}>
         <div><p className="step-description">Choose your route and access. Matching movers see general areas; your contact stays private.</p><div className="form-grid"><SelectField label="Moving from" value={move.fromArea} options={areas} onChange={e=>setMove(s=>({...s,fromArea:e.target.value}))}/><SelectField label="Moving to" value={move.toArea} options={areas} onChange={e=>setMove(s=>({...s,toArea:e.target.value}))}/><TextField label="Moving date" required type="date" min={new Date().toISOString().slice(0,10)} value={move.date} onChange={e=>setMove(s=>({...s,date:e.target.value}))}/><TextField label="Approx. distance (km)" type="number" min="0" max="500" value={move.km} onChange={e=>setMove(s=>({...s,km:e.target.value}))}/><TextField label="Current floor" type="number" min="0" max="50" value={move.fromFloor} onChange={e=>setMove(s=>({...s,fromFloor:e.target.value}))}/><TextField label="Destination floor" type="number" min="0" max="50" value={move.toFloor} onChange={e=>setMove(s=>({...s,toFloor:e.target.value}))}/></div><label className="check-control lift-check"><input type="checkbox" checked={move.hasLift} onChange={e=>setMove(s=>({...s,hasLift:e.target.checked}))}/> Working lift accessible at both buildings / দুই ভবনেই লিফট আছে</label></div>
-        <div><p className="step-description"><span lang="bn">ছবি দিয়ে তালিকা করুন, তারপর যাচাই করুন।</span> Scan photos or add furniture manually. You approve every change.</p><FurnitureRecognition key={demoMode?'demo':profile?.id} prepareImage={imageToData} token={demoMode?null:auth.session?.access_token} demoMode={demoMode} onPendingChange={setAiPending} onApply={items=>{setMove(old=>({...old,items}));notify('Reviewed inventory applied. Add any missing items below.');}}/><details className="manual-inventory"><summary>Manual inventory · {move.items.reduce((sum,item)=>sum+item.qty,0)} items</summary><p className="small muted">Adjust pre-filled items to match your move, or add anything the scan missed.</p><div className="inventory-list">{furniture.map(f=>{const count=move.items.find(i=>i.name===f.key)?.qty||0;return <div className="inventory-item" key={f.key}><span>{f.label}</span><div className="stepper"><button type="button" onClick={()=>setItemQty(f.key,-1)} aria-label={`Remove ${f.label}`} disabled={!count}><Minus size={15}/></button><b>{count}</b><button type="button" onClick={()=>setItemQty(f.key,1)} aria-label={`Add ${f.label}`}><Plus size={15}/></button></div></div>})}</div></details></div>
+        <div><p className="step-description"><span lang="bn">ছবি দিয়ে তালিকা করুন, তারপর যাচাই করুন।</span> Scan photos or add furniture manually. You approve every change.</p><FurnitureRecognition key={profile?.id} prepareImage={imageToData} token={auth.session?.access_token} onPendingChange={setAiPending} onApply={items=>{setMove(old=>({...old,items}));notify('Reviewed inventory applied. Add any missing items below.');}}/><details className="manual-inventory"><summary>Manual inventory · {move.items.reduce((sum,item)=>sum+item.qty,0)} items</summary><p className="small muted">Add your furniture manually, or correct anything the scan missed.</p><div className="inventory-list">{furniture.map(f=>{const count=move.items.find(i=>i.name===f.key)?.qty||0;return <div className="inventory-item" key={f.key}><span>{f.label}</span><div className="stepper"><button type="button" onClick={()=>setItemQty(f.key,-1)} aria-label={`Remove ${f.label}`} disabled={!count}><Minus size={15}/></button><b>{count}</b><button type="button" onClick={()=>setItemQty(f.key,1)} aria-label={`Add ${f.label}`}><Plus size={15}/></button></div></div>})}</div></details></div>
         <div><MovingBudget move={move} pending={aiPending}/><p className="step-description">Share this request to compare independent mover quotations.</p><div className="form-grid"><TextField label="Your name *" placeholder="Full name" value={move.customerName} onChange={e=>setMove(s=>({...s,customerName:e.target.value}))} required/><TextField label="Phone number *" placeholder="01XXXXXXXXX" value={move.customerPhone} onChange={e=>setMove(s=>({...s,customerPhone:e.target.value}))} required/></div><label className="field"><span>Notes for movers</span><textarea rows="3" className="form-control" placeholder="e.g. fridge on third floor, narrow stairs" value={move.notes} onChange={e=>setMove(s=>({...s,notes:e.target.value}))}/></label><label className="check-control consent-check"><input type="checkbox" checked={move.customerConsent} onChange={e=>setMove(s=>({...s,customerConsent:e.target.checked}))}/> I agree to share my phone number and move details with the worker I explicitly select, so we can confirm by phone.</label>{aiPending&&<p role="status" className="small muted">Review or discard your photo suggestions before publishing.</p>}<button type="submit" className="btn btn-primary btn-block" disabled={saving||aiPending}>Publish moving request <ArrowRight size={17}/></button></div>
       </MovingSteps>
       <aside className="quote-aside"><details className="quote-card"><summary>Move details</summary><span className="eyebrow">MOVER QUOTATIONS</span><div className="route-dots"><span><span className="route-point start"/>{move.fromArea}</span><span className="route-divider"/><span><span className="route-point end"/>{move.toArea}</span></div><div className="quote-row"><span>Items selected</span><strong>{move.items.reduce((s,x)=>s+x.qty,0)}</strong></div><div className="quote-row"><span>Approximate distance</span><strong>{move.km} km</strong></div><div className="quote-row"><span>Scheduled date</span><strong>{move.date||'Not set'}</strong></div><div className="quote-row"><span>Floors and access</span><strong>{move.fromFloor} → {move.toFloor} · {move.hasLift?'Lift available':'No lift'}</strong></div><p className="marketplace-note">Independent movers set their own prices. Compare their quotations and choose one before contact details are shared.</p></details><p className="contact-privacy"><ShieldCheck size={17}/> Compare quotes and select a mover before contacts are shared. Confirm by phone; no upfront payment.</p></aside></div></section>)}
-      {page==='activity'&&(!demoMode&&!profile?accountGate('renter'):<section className="container workspace"><LayoutTitle title="My requests" desc="Viewings, quotations, and phone confirmations in one place." icon={LayoutDashboard}/><div className="dashboard-grid activity-grid"><div className="form-panel"><h3>Moving service requests <Badge>{db.requests.length}</Badge></h3>{!db.requests.length?<Empty icon={Truck} title="No moving requests yet" description="Build an inventory and request mover quotations." action={<button aria-label="Plan a move" className="btn btn-soft" onClick={()=>go('moving')}>Plan a move / স্থানান্তরের পরিকল্পনা <ArrowRight size={15}/></button>}/>:db.requests.map(req=>{const chosen=req.offers.find(o=>o.id===req.selectedOfferId);const worker=chosen&&db.workers.find(w=>w.id===chosen.workerId);const pendingOffers=req.offers.filter(o=>o.status==='pending');return <div className="request-card" key={req.id}><div className="request-top"><div><strong>{req.fromArea} <ArrowRight size={14}/> {req.toArea}</strong><small>{req.date} · {req.items.reduce((s,x)=>s+x.qty,0)} items /টি</small></div><div><Badge tone={req.status==='confirmed'?'success':req.status==='open'?'warm':'neutral'}>{req.status==='open'?(pendingOffers.length?'Quotations received':'Waiting for mover quotations'):req.status==='awaiting_call'?'Call to confirm':req.status==='confirmed'?'Confirmed':req.status}</Badge>{req.status==='open'&&<small className="request-state-bn" lang="bn">{pendingOffers.length?'মুভারের দর পাওয়া গেছে':'মুভারের দরপত্রের অপেক্ষায়'}</small>}</div></div><div className="request-summary"><span>Mover quotations / মুভারের দর <b>{pendingOffers.length+req.offers.filter(o=>o.status==='selected').length}</b></span></div>{req.status==='open'&&<div className="offers-list">{pendingOffers.length===0?<><p className="muted small">Waiting for mover quotations.</p><small lang="bn">মুভারের দরপত্রের অপেক্ষায়</small></>:<><p className="muted small">Compare independent quotations and choose a mover.</p><QuoteComparison offers={pendingOffers} workers={db.workers} saving={saving} onChoose={id=>choose(req,id)}/></>}</div>}{(req.status==='awaiting_call'||req.status==='confirmed')&&worker&&<div className="selected-worker"><div className="selected-worker-top"><CheckCircle2 size={19}/><div><strong>{worker.name} — {money(chosen.amount)}</strong><small>{worker.sample?'Demo account; cannot make a real call.':'User-added account; identity unverified.'}</small></div></div>{phoneLink(worker.phone)?<a className="btn btn-primary btn-block" href={phoneLink(worker.phone)}><Phone size={17}/> Call mover / মুভারকে কল: {worker.phone}</a>:<div className="inline-alert"><Info size={15}/> Demo worker has no callable number. / ডেমো মুভারের নম্বর নেই।</div>}{req.status==='awaiting_call'&&<div className="dual-buttons"><button aria-label="Mark confirmed after call" className="btn btn-primary" disabled={saving} onClick={()=>confirmRequest(req.id)}><Check size={15}/> Mark confirmed after call / কলের পর নিশ্চিত করুন</button><button aria-label="Decline & reopen" className="btn btn-outline" disabled={saving} onClick={()=>declineRequest(req.id)}>Decline & reopen / প্রত্যাখ্যান করে আবার খুলুন</button></div>}{req.status==='confirmed'&&<Badge tone="success">Confirmed by customer / গ্রাহক নিশ্চিত করেছেন</Badge>}</div>}</div>})}</div>
-        <div className="form-panel"><h3>Property viewing inquiries <Badge>{db.inquiries.length}</Badge></h3>{!db.inquiries.length?<Empty icon={CalendarDays} title="No viewing requests" description="Choose a rental listing and send the owner an inquiry." action={<button className="btn btn-soft" onClick={()=>go('explore')}>Explore homes</button>}/>:db.inquiries.map(i=><div className="mini-entry" key={i.id}><div><strong>{i.listingTitle}</strong><small>Viewing: {i.date}</small><small>Status: {i.status}</small></div><Badge>{i.status}</Badge></div>)}<div className="aside-tip"><Info size={17}/><span>{demoMode?'Prototype data lives only in this browser. Real cross-device messaging requires authentication and a shared database.':'Your requests are saved to your account. Use Refresh listings to load the latest responses.'}</span></div></div></div></section>)}
-      {page==='worker'&&(!demoMode&&profile?.role!=='mover'?accountGate('mover'):<MoverWorkspace
-        demoMode={demoMode} db={db} activeWorker={activeWorker} setDb={setDb}
+      {page==='activity'&&(profile?.role!=='renter'?accountGate('renter'):<section className="container workspace"><LayoutTitle title="My requests" desc="Viewings, quotations, and phone confirmations in one place." icon={LayoutDashboard}/><div className="dashboard-grid activity-grid"><div className="form-panel"><h3>Moving service requests <Badge>{db.requests.length}</Badge></h3>{!db.requests.length?<Empty icon={Truck} title="No moving requests yet" description="Build an inventory and request mover quotations." action={<button aria-label="Plan a move" className="btn btn-soft" onClick={()=>go('moving')}>Plan a move / স্থানান্তরের পরিকল্পনা <ArrowRight size={15}/></button>}/>:db.requests.map(req=>{const chosen=req.offers.find(o=>o.id===req.selectedOfferId);const worker=chosen&&db.workers.find(w=>w.id===chosen.workerId);const pendingOffers=req.offers.filter(o=>o.status==='pending');return <div className="request-card" key={req.id}><div className="request-top"><div><strong>{req.fromArea} <ArrowRight size={14}/> {req.toArea}</strong><small>{req.date} · {req.items.reduce((s,x)=>s+x.qty,0)} items /টি</small></div><div><Badge tone={req.status==='confirmed'?'success':req.status==='open'?'warm':'neutral'}>{req.status==='open'?(pendingOffers.length?'Quotations received':'Waiting for mover quotations'):req.status==='awaiting_call'?'Call to confirm':req.status==='confirmed'?'Confirmed':req.status}</Badge>{req.status==='open'&&<small className="request-state-bn" lang="bn">{pendingOffers.length?'মুভারের দর পাওয়া গেছে':'মুভারের দরপত্রের অপেক্ষায়'}</small>}</div></div><div className="request-summary"><span>Mover quotations / মুভারের দর <b>{pendingOffers.length+req.offers.filter(o=>o.status==='selected').length}</b></span></div>{req.status==='open'&&<div className="offers-list">{pendingOffers.length===0?<><p className="muted small">Waiting for mover quotations.</p><small lang="bn">মুভারের দরপত্রের অপেক্ষায়</small></>:<><p className="muted small">Compare independent quotations and choose a mover.</p><QuoteComparison offers={pendingOffers} workers={db.workers} saving={saving} onChoose={id=>choose(req,id)}/></>}</div>}{(req.status==='awaiting_call'||req.status==='confirmed')&&worker&&<div className="selected-worker"><div className="selected-worker-top"><CheckCircle2 size={19}/><div><strong>{worker.name} — {money(chosen.amount)}</strong><small>Identity unverified.</small></div></div>{phoneLink(worker.phone)?<a className="btn btn-primary btn-block" href={phoneLink(worker.phone)}><Phone size={17}/> Call mover / মুভারকে কল: {worker.phone}</a>:<div className="inline-alert"><Info size={15}/> Mover contact is unavailable. Refresh or try again.</div>}{req.status==='awaiting_call'&&<div className="dual-buttons"><button aria-label="Mark confirmed after call" className="btn btn-primary" disabled={saving} onClick={()=>confirmRequest(req.id)}><Check size={15}/> Mark confirmed after call / কলের পর নিশ্চিত করুন</button><button aria-label="Decline & reopen" className="btn btn-outline" disabled={saving} onClick={()=>declineRequest(req.id)}>Decline & reopen / প্রত্যাখ্যান করে আবার খুলুন</button></div>}{req.status==='confirmed'&&<Badge tone="success">Confirmed by customer / গ্রাহক নিশ্চিত করেছেন</Badge>}</div>}</div>})}</div>
+        <div className="form-panel"><h3>Property viewing inquiries <Badge>{db.inquiries.length}</Badge></h3>{!db.inquiries.length?<Empty icon={CalendarDays} title="No viewing requests" description="Choose a rental listing and send the owner an inquiry." action={<button className="btn btn-soft" onClick={()=>go('explore')}>Explore homes</button>}/>:db.inquiries.map(i=><div className="mini-entry" key={i.id}><div><strong>{i.listingTitle}</strong><small>Viewing: {i.date}</small><small>Status: {i.status}</small></div><Badge>{i.status}</Badge></div>)}<div className="aside-tip"><Info size={17}/><span>Your requests are saved to your account. Refresh to load the latest responses.</span></div></div></div></section>)}
+      {page==='worker'&&(profile?.role!=='mover'?accountGate('mover'):<MoverWorkspace
+        db={db} activeWorker={activeWorker}
         setAvailability={setAvailability} workerForm={workerForm} setWorkerForm={setWorkerForm}
         workerRegister={workerRegister} saving={saving} workerQuote={workerQuote}
-        setWorkerQuote={setWorkerQuote} offer={offer} go={go}/>)}
+        setWorkerQuote={setWorkerQuote} offer={offer}/>)}
     </main>
-    <footer className="footer"><div className="container footer-grid"><div className="footer-brand"><span className="brand-logo"><House size={19}/></span><strong>BashaShift</strong><p>One calmer journey from your old home to the next.</p></div><div><strong>{demoMode?'Prototype disclosures':'Account and listing notice'}</strong><p>{demoMode?'All seeded rental listings and worker accounts are fictional. No identity verification, public messaging, or real bookings are provided by this browser-only MVP.':'Listings and requests are shared through accounts. Owners and movers remain unverified. Confirm details by phone; no payments are collected.'}</p></div><div><strong>Explore / খুঁজুন</strong>{visibleNav.map(item=><button key={item.key} aria-label={item.english} onClick={()=>go(item.key)}>{item.english} / {item.bangla}</button>) }</div></div><div className="container footer-bottom">{demoMode?'BashaShift · Hackathon prototype · Made for Bangladesh · No payment collected':'BashaShift · Rental to relocation · Made for Bangladesh · No payment collected'}</div></footer>
-    {currentListing&&<div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Property details" onMouseDown={e=>{if(e.target===e.currentTarget)setListing(null)}}><div className="listing-modal"><button className="modal-close" onClick={()=>setListing(null)} aria-label="Close"><X size={20}/></button><PropertyArt listing={currentListing} className="modal-art"/><div className="modal-content"><div className="modal-top"><div><span className="eyebrow">{currentListing.sample?'DEMO LISTING — NOT REAL':'USER LISTING — UNVERIFIED'}</span><h2>{currentListing.title}</h2><p className="muted"><MapPin size={15}/>{currentListing.block}, {currentListing.area}, Dhaka</p></div><div className="modal-rent"><strong>{money(currentListing.rent)}</strong><small>per month</small></div></div><div className="modal-facts"><span><BedDouble size={18}/>{currentListing.beds} bedrooms</span><span><DoorOpen size={18}/>{currentListing.baths} baths</span><span><Building2 size={18}/>{currentListing.sqft} sqft</span><span><CalendarDays size={18}/>{currentListing.available}</span></div><p>{currentListing.description||'No description provided.'}</p><p className="small muted">Amenities: {['lift','balcony','parking'].filter(x=>currentListing[x]).join(' · ')||'Not specified'}. No availability or ownership verification in prototype.</p><div className="panel-split"/><h3>Request a viewing</h3>{(!profile||profile.role==='renter'||demoMode)?<form onSubmit={requestVisit}><div className="form-grid"><TextField label="Your name" value={inquiry.name} onChange={e=>setInquiry(s=>({...s,name:e.target.value}))} required/><TextField label="Your phone" placeholder="01XXXXXXXXX" value={inquiry.phone} onChange={e=>setInquiry(s=>({...s,phone:e.target.value}))} required/><TextField label="Preferred viewing date" type="date" value={inquiry.date} onChange={e=>setInquiry(s=>({...s,date:e.target.value}))}/><TextField label="Message (optional)" placeholder="Any questions?" value={inquiry.message} onChange={e=>setInquiry(s=>({...s,message:e.target.value}))}/></div><div className="modal-actions"><button aria-label="Send inquiry" className="btn btn-primary" type="submit" disabled={saving}>Send inquiry <ArrowRight size={16}/></button>{(!profile||profile.role==='renter')&&!currentListing.sample&&phoneLink(currentListing.ownerPhone)&&<a aria-label="Call owner" className="btn btn-outline" href={phoneLink(currentListing.ownerPhone)}><Phone size={16}/> Call owner / মালিককে কল</a>}{(demoMode||!profile||profile.role==='renter')&&<button aria-label="Plan move here" className="btn btn-soft" type="button" onClick={()=>planMove(currentListing)}><Truck size={16}/> Plan move here / এখানে স্থানান্তর</button>}</div></form>:<p className="muted small">Viewing requests are for renter accounts. / বাসা দেখার অনুরোধ শুধু ভাড়াটিয়ারা পাঠাতে পারবেন</p>}{currentListing.sample&&<p className="muted small">No real owner is associated with this listing. / ডেমো বাসার কোনো প্রকৃত মালিক নেই</p>}</div></div></div>}
-    {authDialog&&supabase&&!demoMode&&<AuthModal client={supabase} initialRole={authDialog==='reset'?'renter':authDialog} initialMode={authDialog==='reset'?'reset':'login'} onAuthenticated={authenticatedAs} onClose={()=>setAuthDialog(null)}/>}
+    <footer className="footer"><div className="container footer-grid"><div className="footer-brand"><span className="brand-logo"><House size={19}/></span><strong>BashaShift</strong><p>One calmer journey from your old home to the next.</p></div><div><strong>Account and listing notice</strong><p>Owners and movers remain unverified. Confirm details by phone; no payments are collected.</p></div><div><strong>Explore / খুঁজুন</strong>{visibleNav.map(item=><button key={item.key} aria-label={item.english} onClick={()=>go(item.key)}>{item.english} / {item.bangla}</button>) }</div></div><div className="container footer-bottom">BashaShift · Rental to relocation · Made for Bangladesh · No payment collected</div></footer>
+    {currentListing&&<div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Property details" onMouseDown={e=>{if(e.target===e.currentTarget)setListing(null)}}><div className="listing-modal"><button className="modal-close" onClick={()=>setListing(null)} aria-label="Close"><X size={20}/></button><PropertyArt listing={currentListing} className="modal-art"/><div className="modal-content"><div className="modal-top"><div><span className="eyebrow">USER LISTING — UNVERIFIED</span><h2>{currentListing.title}</h2><p className="muted"><MapPin size={15}/>{currentListing.block}, {currentListing.area}, Dhaka</p></div><div className="modal-rent"><strong>{money(currentListing.rent)}</strong><small>per month</small></div></div><div className="modal-facts"><span><BedDouble size={18}/>{currentListing.beds} bedrooms</span><span><DoorOpen size={18}/>{currentListing.baths} baths</span><span><Building2 size={18}/>{currentListing.sqft} sqft</span><span><CalendarDays size={18}/>{currentListing.available}</span></div><p>{currentListing.description||'No description provided.'}</p><p className="small muted">Amenities: {['lift','balcony','parking'].filter(x=>currentListing[x]).join(' · ')||'Not specified'}. Availability and ownership are unverified.</p><div className="panel-split"/><h3>Request a viewing</h3>{(!profile||profile.role==='renter')?<form onSubmit={requestVisit}><div className="form-grid"><TextField label="Your name" value={inquiry.name} onChange={e=>setInquiry(s=>({...s,name:e.target.value}))} required/><TextField label="Your phone" placeholder="01XXXXXXXXX" value={inquiry.phone} onChange={e=>setInquiry(s=>({...s,phone:e.target.value}))} required/><TextField label="Preferred viewing date" type="date" value={inquiry.date} onChange={e=>setInquiry(s=>({...s,date:e.target.value}))}/><TextField label="Message (optional)" placeholder="Any questions?" value={inquiry.message} onChange={e=>setInquiry(s=>({...s,message:e.target.value}))}/></div><div className="modal-actions"><button aria-label="Send inquiry" className="btn btn-primary" type="submit" disabled={saving}>Send inquiry <ArrowRight size={16}/></button>{(!profile||profile.role==='renter')&&phoneLink(currentListing.ownerPhone)&&<a aria-label="Call owner" className="btn btn-outline" href={phoneLink(currentListing.ownerPhone)}><Phone size={16}/> Call owner / মালিককে কল</a>}{(!profile||profile.role==='renter')&&<button aria-label="Plan move here" className="btn btn-soft" type="button" onClick={()=>planMove(currentListing)}><Truck size={16}/> Plan move here / এখানে স্থানান্তর</button>}</div></form>:<p className="muted small">Viewing requests are for renter accounts. / বাসা দেখার অনুরোধ শুধু ভাড়াটিয়ারা পাঠাতে পারবেন</p>}</div></div></div>}
+    {authDialog&&supabase&&<AuthModal client={supabase} initialRole={authDialog==='reset'?'renter':authDialog} initialMode={authDialog==='reset'?'reset':'login'} onAuthenticated={authenticatedAs} onClose={()=>setAuthDialog(null)}/>}
     {toast&&<div role="status" className="toast"><Info size={17}/>{toast}<button onClick={()=>setToast('')} aria-label="Dismiss"><X size={15}/></button></div>}
   </div>;
 }

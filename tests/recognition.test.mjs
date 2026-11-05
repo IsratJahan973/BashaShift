@@ -22,14 +22,14 @@ test('moving requests preserve approved inventory without inventing a platform p
 test('scan client sends photo permission and a session header; failures do not synthesize inventory',async()=>{
   let request;
   const items=[{name:'Bed',qty:2,confidence:'medium'}];
-  assert.deepEqual(await scanFurniture({images:['photo'],token:'session-token',demoMode:false,fetchImpl:async(url,init)=>{
+  assert.deepEqual(await scanFurniture({images:['photo'],token:'session-token',fetchImpl:async(url,init)=>{
     request={url,...init};return new Response(JSON.stringify({source:'openai',reviewRequired:true,items}),{status:200});
   }}),items);
   assert.equal(request.url,'/api/scan');assert.equal(request.headers.Authorization,'Bearer session-token');
   assert.deepEqual(JSON.parse(request.body),{images:['photo'],consent:true});
   assert.equal(Object.hasOwn(request.headers,'OPENAI_API_KEY'),false);
-  await assert.rejects(scanFurniture({images:['photo'],demoMode:true,fetchImpl:async()=>new Response(JSON.stringify({error:'AI is not configured'}),{status:503})}),/not configured/);
-  await assert.rejects(scanFurniture({images:['photo'],demoMode:true,fetchImpl:async()=>new Response('not JSON',{status:200})}),/unavailable/);
+  await assert.rejects(scanFurniture({images:['photo'],token:'session-token',fetchImpl:async()=>new Response(JSON.stringify({error:'AI is not configured'}),{status:503})}),/not configured/);
+  await assert.rejects(scanFurniture({images:['photo'],token:'session-token',fetchImpl:async()=>new Response('not JSON',{status:200})}),/unavailable/);
 });
 
 test('Cloudflare suggestions require an explicit review flag and supported quantities before the renter can apply them',async()=>{

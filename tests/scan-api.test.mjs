@@ -56,10 +56,10 @@ test('unauthenticated users and non-renter roles cannot use paid scanning',async
     assert.equal((await post({images:[photo],consent:true},{Authorization:'','X-BashaShift-Demo':'1'})).status,401);
   });
 });
-test('explicit development-only loopback demo mode is supported; API errors remain JSON',async()=>{
-  await withServer({env:{OPENAI_API_KEY:key,AI_ENABLE_OPENAI_FALLBACK:'true',AI_ALLOW_DEMO_SCAN:'true',NODE_ENV:'development'},verifyRenter:null},async post=>{
-    assert.equal((await post({images:[photo],consent:true},{Authorization:'','X-BashaShift-Demo':'1'})).status,200);
-    const malformed=await post('{',{Authorization:'','X-BashaShift-Demo':'1'});assert.equal(malformed.status,400);assert.equal((await malformed.json()).code,'invalid_json');
+test('legacy development demo headers never bypass renter authentication; API errors remain JSON',async()=>{
+  await withServer({env:{OPENAI_API_KEY:key,AI_ENABLE_OPENAI_FALLBACK:'true',AI_ALLOW_DEMO_SCAN:'true',NODE_ENV:'development'}},async post=>{
+    assert.equal((await post({images:[photo],consent:true},{Authorization:'','X-BashaShift-Demo':'1'})).status,401);
+    const malformed=await post('{');assert.equal(malformed.status,400);assert.equal((await malformed.json()).code,'invalid_json');
   });
 });
 test('consent, count, format, base64, corrupt images and byte limits are checked before AI',async()=>{

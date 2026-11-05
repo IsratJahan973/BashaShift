@@ -6,7 +6,7 @@ import { loginAccount, readSupabaseConfig, registerAccount, registrationData, re
 const publicKey = () => 'sb_publishable_'+randomUUID();
 const form = () => ({ email: ' renter@example.test ', password: randomUUID(), role: 'renter', display_name: ' Test Renter ', phone: '018-1234-5678' });
 
-test('missing configuration selects the labeled demo; incomplete configuration fails', () => {
+test('missing configuration leaves accounts unconfigured; incomplete configuration fails', () => {
   assert.equal(readSupabaseConfig({}).configured, false);
   assert.throws(() => readSupabaseConfig({ VITE_SUPABASE_URL: 'https://example.supabase.co' }));
 });
@@ -78,7 +78,7 @@ test('password update validates length and propagates Supabase Auth failures', a
   assert.deepEqual(updated, { password:'long-enough-password' });
 });
 
-test('production configuration requires a hosted API origin while test/development retain local demo support',()=>{
+test('production configuration requires a hosted API origin while test/development support a local Supabase API',()=>{
   assert.throws(()=>readSupabaseConfig({}, {requireHosted:true}),/Production requires/);
   for(const url of ['http://localhost:54321','https://localhost','https://127.0.0.2','https://[::1]']){
     assert.throws(()=>readSupabaseConfig({VITE_SUPABASE_URL:url,VITE_SUPABASE_PUBLISHABLE_KEY:publicKey()},{requireHosted:true}),/hosted HTTPS/);

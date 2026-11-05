@@ -54,7 +54,7 @@ test('production entry binds the supplied PORT, serves the SPA and assets with A
     await Promise.race([ready,new Promise((_,reject)=>{const timer=setTimeout(()=>reject(new Error('Server startup timed out')),8000);timer.unref();})]);
     const base=`http://127.0.0.1:${port}`;
     const health=await fetch(base+'/api/health');
-    assert.deepEqual(await health.json(),{ok:true,aiConfigured:false,aiRequiresRenterLogin:true,aiDemoEnabled:false});
+    assert.deepEqual(await health.json(),{ok:true,aiConfigured:false,aiRequiresRenterLogin:true});
     assert.equal(health.headers.get('cache-control'),'no-store');
     const home=await fetch(base+'/');assert.equal(home.status,200);assert.match(await home.text(),/Built frontend fixture/);
     const nested=await fetch(base+'/renter/requests',{headers:{Accept:'text/html'}});
