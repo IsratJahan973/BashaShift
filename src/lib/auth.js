@@ -12,7 +12,7 @@ function validatePublicKey(key) {
 }
 
 export function readSupabaseConfig(env = {}, { requireHosted = false } = {}) {
-  if (Object.entries(env).some(([name,value]) => value && /^VITE_.*(?:SERVICE_ROLE|SECRET|PASSWORD|PRIVATE_KEY|OPENAI|CLOUDFLARE)/i.test(name))) {
+  if (Object.entries(env).some(([name,value]) => value && /^VITE_.*(?:SERVICE_ROLE|SECRET|PASSWORD|PRIVATE_KEY|OPENAI|CLOUDFLARE|HEIGIT|OPENROUTESERVICE)/i.test(name))) {
     throw new Error('Server credentials must not use VITE_ variable names.');
   }
   const url = env.VITE_SUPABASE_URL?.trim() || '';

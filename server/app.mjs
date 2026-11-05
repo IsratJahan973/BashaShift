@@ -7,6 +7,7 @@ import {EnvHttpProxyAgent,fetch as proxyFetch} from 'undici';
 import {ScanError,validatePhotos} from './ai.mjs';
 import {createRenterVerifier} from './scan-auth.mjs';
 import {createFurnitureRecognizer} from './scan-provider.mjs';
+import {createDrivingRouter} from './routes.mjs';
 
 const proxyAgent=new EnvHttpProxyAgent();
 const outboundFetch=(url,init)=>proxyFetch(url,{...init,dispatcher:proxyAgent});
@@ -22,7 +23,7 @@ function windowLimit(max,windowMs,clock){
   };
 }
 export function createApp({env=process.env,fetchImpl=outboundFetch,verifyRenter=createRenterVerifier(env,fetchImpl),
-  timeoutMs=25000,scanLimit=5,concurrencyLimit=2,clock=Date.now,logScanFailure,
+  timeoutMs=25000,routeTimeoutMs=8000,scanLimit=5,routeLimit=12,concurrencyLimit=2,clock=Date.now,logScanFailure,
   dist=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../dist')}={}){
   const app=express();app.disable('x-powered-by');
   // Render terminates the public connection at one ingress proxy. Trust only that hop.
@@ -33,6 +34,24 @@ export function createApp({env=process.env,fetchImpl=outboundFetch,verifyRenter=
   const attempts=windowLimit(40,60000,clock),scans=windowLimit(scanLimit,60000,clock);
   let active=0;
   app.get('/api/health',(_req,res)=>res.json({ok:true,aiConfigured:recognizer.configured,aiRequiresRenterLogin:true}));
+  const drivingRoute=createDrivingRouter({env,fetchImpl,clock,timeoutMs:routeTimeoutMs});
+  const routeAttempts=windowLimit(40,60000,clock),routeCalls=windowLimit(routeLimit,60000,clock);
+  app.get('/api/route',async(req,res,next)=>{
+    res.set('X-Request-ID',randomUUID());
+    try{
+      const retry=routeAttempts(req.ip);
+      if(retry){res.set('Retry-After',String(retry));throw new ScanError(429,'rate_limited','Too many route attempts. Enter distance manually or retry later.');}
+      const bearer=req.get('Authorization')?.match(/^Bearer ([A-Za-z0-9._~+/-]+=*)$/);
+      if(!bearer||bearer[1].length>8192)throw new ScanError(401,'sign_in_required','Sign in as a renter to calculate driving distance.');
+      if(!verifyRenter)throw new ScanError(503,'account_service_unavailable','Account verification is unavailable. Enter distance manually.');
+      const actor=await verifyRenter(bearer[1]);
+      if(actor?.role!=='renter'||!actor.id)throw new ScanError(403,'renter_required','A renter account is required.');
+      const limited=routeCalls(actor.id);
+      if(limited){res.set('Retry-After',String(limited));throw new ScanError(429,'rate_limited','Route limit reached. Enter distance manually or retry later.');}
+      if(Object.keys(req.query).some(key=>!['from','to'].includes(key)))throw new ScanError(400,'invalid_area','Use area names only.');
+      res.json(await drivingRoute(req.query.from,req.query.to));
+    }catch(error){next(error instanceof ScanError?error:new ScanError(503,'route_unavailable','Driving distance is unavailable. Enter distance manually.'));}
+  });
   app.post('/api/scan',async(req,res,next)=>{
     req.scanRequestId=randomUUID();res.set('X-Request-ID',req.scanRequestId);
     try{

@@ -15,12 +15,14 @@
     "test:integration": "node scripts/local-supabase.mjs test",
     "test:browser:live": "node scripts/local-supabase.mjs browser",
     "test:browser:auth-ui": "node scripts/test-auth-ui.mjs",
-    "test:browser:ai": "node scripts/test-ai-browser.mjs"
+    "test:browser:ai": "node scripts/test-ai-browser.mjs",
+    "test:browser:routes": "node scripts/test-ai-browser.mjs --routes-only"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.118.0",
     "dotenv": "^16.5.0",
     "express": "^4.21.2",
+    "leaflet": "1.9.4",
     "lucide-react": "^0.468.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

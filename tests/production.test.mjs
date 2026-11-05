@@ -14,7 +14,7 @@ const publicEnv={NODE_ENV:'production',RENDER:'true',VITE_SUPABASE_URL:'https://
 async function fixture(frontend=true){
   const directory=await mkdtemp(path.join(tmpdir(),'bashashift-production-'));
   await mkdir(path.join(directory,'server'));
-  for(const name of ['index.mjs','app.mjs','ai.mjs','scan-auth.mjs','cloudflare-ai.mjs','scan-provider.mjs'])await copyFile(path.join(root,'server',name),path.join(directory,'server',name));
+  for(const name of ['index.mjs','app.mjs','ai.mjs','scan-auth.mjs','cloudflare-ai.mjs','scan-provider.mjs','routes.mjs','routing-areas.mjs'])await copyFile(path.join(root,'server',name),path.join(directory,'server',name));
   await symlink(path.join(root,'node_modules'),path.join(directory,'node_modules'),'dir');
   await symlink(path.join(root,'src'),path.join(directory,'src'),'dir');
   if(frontend){

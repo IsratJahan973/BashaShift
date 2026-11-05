@@ -55,7 +55,7 @@ with app_server() as base_url, sync_playwright() as p:
         scan_requests=[]
         property_fixture={'id':str(uuid4()),'owner_id':str(uuid4()),'owner_name':'Fixture owner','title':'Browser test apartment (synthetic)',
             'status':'published','is_demo':False,'rent':19000,'beds':2,'baths':1,'sqft':1100,'floor':3,'lift':True,'parking':False,'balcony':True,
-            'area':'Banasree','block':'Test Block','available':'2026-11-15','description':'Synthetic browser fixture','property_images':[]}
+            'area':' bAnAsReE ','block':'Test Block','available':'2026-11-15','description':'Synthetic browser fixture','property_images':[]}
 
         def respond(route, body, status=200):
             route.fulfill(status=status, content_type='application/json', body=json.dumps(body), headers={
@@ -144,6 +144,8 @@ with app_server() as base_url, sync_playwright() as p:
             expect(page.locator('.home-card')).to_have_count(1)
             expect(page.locator('.match-reasons li')).to_have_count(0)
             expect(page.get_by_label('Maximum monthly rent',exact=True)).to_have_count(1)
+            page.get_by_label('Area',exact=True).select_option('Banasree')
+            expect(page.locator('.home-card')).to_have_count(1)
             page.get_by_label('Maximum monthly rent',exact=True).fill('20000')
             expect(page.get_by_text('Matches your filters',exact=True)).to_be_visible()
             expect(page.get_by_text('Preference/value score:',exact=False)).not_to_be_visible()
@@ -158,6 +160,7 @@ with app_server() as base_url, sync_playwright() as p:
             capture(page,'home-search-auth-mocked')
             page.get_by_role('navigation',name='Main navigation').get_by_role('button',name='Moving services',exact=True).click()
             expect(page.locator('.budget-range')).to_have_count(0)
+            page.get_by_label('Approx. distance (km)',exact=True).fill('5')
             page.get_by_role('button',name='Continue to furniture',exact=True).click()
             def scan(route):
                 assert route.request.headers.get('authorization')=='Bearer '+token

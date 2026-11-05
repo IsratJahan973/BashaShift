@@ -1,4 +1,4 @@
-"""Seven isolated authenticated browsers: real embedded RLS/RPCs, mocked Auth and Cloudflare.
+"""Seven isolated authenticated browsers: real embedded RLS/RPCs, mocked Auth/Storage HTTP, Cloudflare and routing.
 Never creates hosted accounts, changes production data or proves live AI accuracy.
 """
 import argparse
@@ -82,8 +82,39 @@ with sync_playwright() as p:
         owner.get_by_label('Bedrooms',exact=True).fill(str(beds))
         if lift:owner.get_by_role('checkbox',name='Lift / লিফট আছে',exact=True).check()
         if parking:owner.get_by_role('checkbox',name='Parking / গাড়ি রাখার জায়গা',exact=True).check()
+        if key=='P1':
+            owner.get_by_label('Property room photos',exact=True).set_input_files([str(photo)]*3)
+            expect(owner.locator('.owner-photo-grid li')).to_have_count(3)
+            owner.get_by_role('button',name='Move photo 3 earlier',exact=True).click()
+            owner.get_by_role('button',name='Move photo 2 earlier',exact=True).click()
+            capture(owner,'owner-room-photo-previews')
         owner.get_by_role('button',name='Publish property',exact=True).click()
         expect(owner.get_by_role('heading',name='Your properties / আপনার বাসা')).to_be_visible()
+    # Existing room photos must survive text edits and reordering under real RLS.
+    p1=owner.locator('.mini-entry').filter(has_text='TEST P1 synthetic apartment')
+    p1.get_by_role('button',name='Edit / বদলান',exact=True).click()
+    expect(owner.locator('.owner-photo-grid li')).to_have_count(3)
+    owner.get_by_role('button',name='Move photo 3 earlier',exact=True).click()
+    owner.get_by_role('button',name='Save and publish',exact=True).click()
+    expect(owner.get_by_role('heading',name='Your properties / আপনার বাসা')).to_be_visible()
+    p1.get_by_role('button',name='Edit / বদলান',exact=True).click()
+    expect(owner.locator('.owner-photo-grid li')).to_have_count(3)
+    owner.get_by_label('Property room photos',exact=True).set_input_files(str(photo))
+    expect(owner.locator('.owner-photo-grid li')).to_have_count(4)
+    def fail_upload(route):route.fulfill(status=500,content_type='application/json',body='{"statusCode":"500","message":"Synthetic storage failure"}')
+    owner.route('**/storage/v1/object/property-images/**',fail_upload)
+    owner.get_by_role('button',name='Save and publish',exact=True).click()
+    expect(owner.get_by_role('status').filter(has_text='Existing photos are unchanged')).to_be_visible()
+    owner.unroute('**/storage/v1/object/property-images/**',fail_upload)
+    owner.get_by_role('button',name='Remove property photo 4',exact=True).click()
+    removed_url=owner.locator('.owner-photo-grid img').nth(2).get_attribute('src')
+    owner.get_by_role('button',name='Remove property photo 3',exact=True).click()
+    owner.get_by_label('Property room photos',exact=True).set_input_files(str(photo))
+    expect(owner.locator('.owner-photo-grid li')).to_have_count(3)
+    owner.get_by_role('button',name='Save and publish',exact=True).click()
+    expect(owner.get_by_role('heading',name='Your properties / আপনার বাসা')).to_be_visible()
+    assert owner.request.get(removed_url).status>=400,'An explicitly removed object must no longer be downloadable'
+    print('PASS owner three-photo upload, existing reorder/edit persistence, replacement/removal and storage failure recovery (embedded RLS, local Storage HTTP adapter)')
     responsive(owner,'owner-live-only-isolated')
 
     guest=new_page()
@@ -91,6 +122,9 @@ with sync_playwright() as p:
     guest.add_init_script("localStorage.setItem('bashashift-prototype-v1',JSON.stringify({listings:[{id:'fake-local',title:'LEGACY FAKE LISTING'}],requests:[],inquiries:[],workers:[]}))")
     guest.goto(args.base_url+'?demo=1')
     expect(guest.locator('.home-card')).to_have_count(5)
+    expect(guest.get_by_label('Search homes',exact=True)).to_have_count(0)
+    expect(guest.get_by_label('Search rental locations',exact=True)).to_have_count(0)
+    expect(guest.locator('.home-card').filter(has_text='TEST P1 synthetic apartment').locator('.property-art img')).to_have_count(1)
     expect(guest.get_by_text('LEGACY FAKE LISTING',exact=True)).to_have_count(0)
     expect(guest.get_by_text('Exact preference match',exact=True)).to_have_count(0)
     assert 'demo=' not in guest.url
@@ -127,6 +161,15 @@ with sync_playwright() as p:
             # Viewing request through the protected shared repository path.
             page.locator('.home-card').filter(has_text='TEST P1 synthetic apartment').get_by_role('button',name='View details',exact=True).click()
             dialog=page.get_by_role('dialog',name='Property details')
+            gallery=dialog.get_by_role('region',name='TEST P1 synthetic apartment photos')
+            expect(gallery.get_by_role('img',name='Property photo 1 of 3',exact=True)).to_be_visible()
+            gallery.get_by_role('button',name='Next property photo',exact=True).click()
+            expect(gallery.get_by_role('img',name='Property photo 2 of 3',exact=True)).to_be_visible()
+            gallery.focus();gallery.press('ArrowRight')
+            expect(gallery.get_by_role('img',name='Property photo 3 of 3',exact=True)).to_be_visible()
+            gallery.evaluate("e=>{const a=new Touch({identifier:0,target:e,clientX:240,clientY:100});e.dispatchEvent(new TouchEvent('touchstart',{bubbles:true,touches:[a]}));const b=new Touch({identifier:0,target:e,clientX:70,clientY:100});e.dispatchEvent(new TouchEvent('touchend',{bubbles:true,changedTouches:[b]}));}")
+            expect(gallery.get_by_role('img',name='Property photo 1 of 3',exact=True)).to_be_visible()
+            capture(page,'renter-property-gallery')
             expect(dialog.get_by_role('link',name='Call owner')).to_have_count(0)
             dialog.get_by_role('button',name='Send inquiry',exact=True).click()
             expect(page.get_by_role('heading',name='My requests',exact=True)).to_be_visible()
@@ -138,6 +181,22 @@ with sync_playwright() as p:
 
     renter=pages['R1'];moving(renter)
     initial=renter.locator('.inventory-list').inner_text()
+    # Camera/gallery are explicit affordances sharing the real sanitation path.
+    camera=renter.get_by_label('Take furniture photo',exact=True)
+    assert camera.get_attribute('capture')=='environment' and camera.get_attribute('multiple') is None
+    for name in ['Take Photo','Choose from Gallery']:
+        with renter.expect_file_chooser() as chooser:
+            renter.get_by_role('button',name=name,exact=True).click()
+        chooser.value.set_files(str(photo))
+    expect(renter.locator('.scan-photos figure')).to_have_count(2)
+    camera.set_input_files(str(photo))
+    expect(renter.locator('.scan-photos figure')).to_have_count(3)
+    expect(renter.get_by_role('button',name='Take Photo',exact=True)).to_be_disabled()
+    renter.get_by_label('Furniture photos',exact=True).set_input_files([str(photo)]*2)
+    expect(renter.get_by_role('alert')).to_contain_text('up to three')
+    renter.locator('.scan-photos figure').last.get_by_role('button').click()
+    renter.locator('.scan-photos figure').last.get_by_role('button').click()
+    renter.locator('.scan-photos figure').last.get_by_role('button').click()
     response=upload(renter);assert response.status==200,response.text()
     expect(renter.locator('.scan-review-row')).to_have_count(3)
     assert renter.locator('.inventory-list').inner_text()==initial

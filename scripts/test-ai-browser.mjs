@@ -19,8 +19,10 @@ try{
     const timeout=setTimeout(()=>server.kill('SIGTERM'),30000);
     const ready=await Promise.race([once(server,'message').then(([message])=>message),once(server,'exit').then(()=>{throw new Error('AI test fixture did not start');})]);
     clearTimeout(timeout);
-    const run=spawnSync(process.env.PYTHON_EXECUTABLE||'python3',['-u','tests/ai_smoke.py','--base-url',ready.url],{stdio:'inherit'});
-    process.exitCode=run.status??1;
+    for(const script of (process.argv.includes('--routes-only')?['tests/routing_smoke.py']:['tests/ai_smoke.py','tests/routing_smoke.py'])){
+      const run=spawnSync(process.env.PYTHON_EXECUTABLE||'python3',['-u',script,'--base-url',ready.url],{stdio:'inherit'});
+      process.exitCode=run.status??1;if(process.exitCode)break;
+    }
   }
 }finally{
   if(server&&server.exitCode===null){server.send('stop');await once(server,'exit');}
