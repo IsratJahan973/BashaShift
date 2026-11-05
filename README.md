@@ -26,7 +26,13 @@ npm run dev
 
 Open `http://localhost:5173`. The `npm run dev` script starts both Vite frontend and Express backend. `npm test` runs domain, Auth/configuration, and embedded PostgreSQL migration/RLS tests. `npm run build` builds production frontend; `npm start` serves built assets with the Node API on port 8787.
 
-Dependencies are locked in `package-lock.json`. Run `npm test` and `npm run build` after installation. See [`docs/PHASE2_QA.md`](docs/PHASE2_QA.md) for current validation results and remaining limitations; live AI still requires a server-side key and a separate real-photo test.
+Dependencies are locked in `package-lock.json`. Run `npm test` and `npm run build` after installation. See [`docs/PHASE3_QA.md`](docs/PHASE3_QA.md) for current validation results and [`docs/PHASE2_QA.md`](docs/PHASE2_QA.md) for the database foundation's verification scope.
+
+## Phase 3: photo-assisted moving inventory
+
+Renters can choose furniture photos, explicitly send them for analysis, review and correct suggested quantities, and apply the approved list before publishing a moving request. Manual entry remains available when AI fails or is unconfigured. The BDT estimate now shows furniture handling, vehicle base, distance, stairs, and rounding; it is an illustrative estimate, never a guaranteed moving price.
+
+Follow [`docs/AI_SETUP.md`](docs/AI_SETUP.md) for backend-only OpenAI configuration, authenticated access, upload limits, the pricing formula, and the demo workflow. No database migration is needed for Phase 3. `npm run test:browser:ai` verifies the upload-to-request journey with **mocked OpenAI**; real-photo accuracy and hosted shared persistence still require separate verification.
 
 ## Supabase accounts and shared rentals
 
@@ -38,7 +44,7 @@ The Supabase SDK requires Node 22+. Never use a service-role or secret key in fr
 
 ```text
 src/                 React components, styles, demo data, and domain logic
-server/index.mjs     Express API and production dist/ serving
+server/              Express API, photo validation, renter verification, OpenAI integration
 tests/               Domain tests and optional browser smoke tests
 docs/                Requirements, architecture, handoff, QA, and screenshots
 .env.example         Public Supabase configuration + server-only environment template
@@ -80,7 +86,7 @@ Supabase behavior below is implemented in code; hosted Auth/Storage and the full
 | Location-matched worker job feed | Database area/availability matching; private contact excluded | Implemented (area match) |
 | Accept or counteroffer | Database-backed authorized offers | Implemented |
 | Customer chooses worker, phone confirm | Transactional selection/reopen/confirmation; self-reported call | Implemented workflow |
-| AI photo furniture recognition | Server endpoint implemented, **not live-tested**; requires API key | Not supported; truthfully disclosed |
+| AI photo furniture recognition | Photo upload, editable review, safe manual fallback; mocked workflow tested, **real API untested** | Not supported; truthfully disclosed |
 | Real accounts and multi-device shared database | Supabase integration; project setup required | Not supported |
 | Identity verification and payments | **Not implemented**; Phase 2 RLS is not a full production security audit | **Not implemented** |
 | Mandatory official sticker graphic | **Not included**. Visible text placeholder only. | Same |
@@ -100,7 +106,7 @@ Supabase behavior below is implemented in code; hosted Auth/Storage and the full
 - API: Node.js + Express, server-side OpenAI Responses API for optional furniture identification.
 - Shared mode: Supabase Auth, Postgres, private photo storage, and database-enforced access policies.
 - Demo mode: separate, clearly labeled `localStorage` data.
-- Live AI and payments are outside Phase 2.
+- Phase 3 adds reviewed AI inventory and itemized estimates; payments remain outside scope.
 - Deployment once database/auth are complete: a Node-hosted web service (e.g. Render) can run `npm run build` then `npm start` with the server-side API secret. Static-only hosting cannot run this Express API without a separate backend.
 
 ## Project handoff documents

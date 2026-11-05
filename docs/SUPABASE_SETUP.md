@@ -18,7 +18,8 @@ key (or legacy `anon` key); it does not need a service-role key.
 4. In **Authentication → URL Configuration**, set your production Site URL and
    allow the development origins you actually use (`http://localhost:5173`,
    `http://127.0.0.1:5173`, and optionally port 8787). Add the production origin
-   when deploying. Confirm email links return to an allowed app origin.
+   when deploying. Confirm signup and password-recovery links return to an
+   allowed app origin; password-reset emails redirect to the current app origin.
 5. Copy the Project URL and **publishable** key from the project's API settings.
    Copy `.env.example` to `.env` and set:
 
@@ -51,6 +52,9 @@ apply this foundation blindly to a project already used by another application.
 - Each account chooses Property Owner, Renter, or Moving Service Provider at
   signup. The database stores that role once. Changing Auth user metadata does
   not change authorization; clients cannot change the profile role.
+- Users can request a password-recovery email from sign-in and set a new
+  password from the secure Supabase recovery session. Hosted recovery links must
+  use an allowed redirect origin, with email delivery configured for the project.
 - Owners create/edit/publish/unpublish their own properties and acknowledge
   their properties' viewing inquiries. A failed photo upload leaves a new
   listing as a draft, not falsely published.

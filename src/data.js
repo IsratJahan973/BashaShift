@@ -1,13 +1,13 @@
 export const areas = ['Banasree', 'Rampura', 'Khilgaon', 'Mirpur', 'Dhanmondi', 'Uttara', 'Mohammadpur', 'Bashundhara', 'Gulshan', 'Other'];
 export const furniture = [
-  { key: 'Bed', label: 'Bed', price: 450, icon: 'bed-double' },
-  { key: 'Sofa', label: 'Sofa', price: 380, icon: 'sofa' },
-  { key: 'Refrigerator', label: 'Refrigerator', price: 350, icon: 'refrigerator' },
-  { key: 'Wardrobe', label: 'Wardrobe', price: 420, icon: 'archive' },
-  { key: 'Dining table', label: 'Dining table', price: 280, icon: 'utensils' },
-  { key: 'Washing machine', label: 'Washing machine', price: 300, icon: 'washing-machine' },
-  { key: 'Boxes', label: 'Moving boxes', price: 70, icon: 'package' },
-  { key: 'Other', label: 'Other / unsure', price: 180, icon: 'package-open' },
+  { key: 'Bed', label: 'Bed', icon: 'bed-double' },
+  { key: 'Sofa', label: 'Sofa', icon: 'sofa' },
+  { key: 'Refrigerator', label: 'Refrigerator', icon: 'refrigerator' },
+  { key: 'Wardrobe', label: 'Wardrobe', icon: 'archive' },
+  { key: 'Dining table', label: 'Dining table', icon: 'utensils' },
+  { key: 'Washing machine', label: 'Washing machine', icon: 'washing-machine' },
+  { key: 'Boxes', label: 'Moving boxes', icon: 'package' },
+  { key: 'Other', label: 'Other / unsure', icon: 'package-open' },
 ];
 export const sampleListings = [
   { id: 'home-demo-1', title: 'Sunlit family apartment', area: 'Banasree', block: 'Block C', rent: 22000, beds: 3, baths: 2, sqft: 1280, floor: 4, lift: true, balcony: true, parking: false, available: '2026-12-01', description: 'Open living space, two balconies, and easy road access. Illustrative property only.', ownerName: 'Demo Owner A', ownerPhone: '', sample: true, image: '', tone: 'sage' },

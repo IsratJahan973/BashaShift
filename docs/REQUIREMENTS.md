@@ -33,7 +33,7 @@
 | FR-21 | P0 | Customer can mark a phone-agreed booking confirmed | ⚠️ Supabase implementation; see Phase 2 QA for tested vs unverified scope |
 | FR-22 | P0 | Customer contact and sensitive details withheld from worker until selected and consented | ⚠️ Supabase implementation; see Phase 2 QA for tested vs unverified scope |
 | FR-23 | P0 | Workers see large simple Bangla-focused job cards and one response action | ✅ |
-| FR-24 | P0 | AI analyzes uploaded furniture photo to suggest visible inventory, reviewed by user | ⚠️ server route coded; key and live test needed |
+| FR-24 | P0 | AI analyzes uploaded furniture photo to suggest visible inventory, reviewed by user | ⚠️ Phase 3 upload/review/request workflow tested with mocked AI; real key/photo verification pending |
 | FR-25 | P0 | No invented properties, availability, worker phone numbers, AI results or price guarantees | ✅ honest display; live moderation still required |
 | FR-26 | P0 | Real authentication with role-aware access controls | ⚠️ Supabase implementation; see Phase 2 QA for tested vs unverified scope |
 | FR-27 | P0 | Shared persistent cloud database and real-time request updates across devices | ⚠️ Supabase implementation; see Phase 2 QA for tested vs unverified scope |
@@ -50,14 +50,14 @@
 | FR-33 | P1 | Real photo upload to private/permitted cloud storage | ⚠️ Supabase implementation; see Phase 2 QA for tested vs unverified scope |
 | FR-34 | P1 | Worker available/offline toggle | ⚠️ Supabase implementation; see Phase 2 QA for tested vs unverified scope |
 | FR-35 | P1 | Cancel expired requests; avoid accepting already-selected jobs (atomic backend transaction) | ⚠️ Supabase implementation; see Phase 2 QA for tested vs unverified scope |
-| FR-36 | P1 | Quote includes item handling vs transport vs stairs breakdown; exclusions | ⚠️ total only in UI |
+| FR-36 | P1 | Quote includes item handling vs transport vs stairs breakdown; exclusions | ✅ React itemized BDT formula and exclusions; browser-tested |
 | FR-37 | P1 | Safe abuse report / suspicious listing report | ❌ |
 | FR-38 | P1 | Confirm property and moving service availability manually before making claims | ⚠️ disclaimers only |
 | FR-39 | P1 | Useful English/Bangla text for renter, full Bangla worker UX | ⚠️ mixed-language worker UI |
 | FR-40 | P1 | Error, loading, empty, confirmation states and mobile accessibility | ⚠️ implemented for most paths; needs accessibility QA |
 | FR-41 | P1 | Separate sample/demo data from actual users and never present fictional inventory as live | ✅ |
-| FR-42 | P1 | Privacy notice and consent for personal phone numbers, home addresses and uploaded photos | ⚠️ contact consent; full policies missing |
-| FR-43 | P1 | Server-side rate limits and abuse prevention on AI scanning and booking APIs | ❌ |
+| FR-42 | P1 | Privacy notice and consent for personal phone numbers, home addresses and uploaded photos | ⚠️ contact and AI photo consent; metadata stripping; full policies missing |
+| FR-43 | P1 | Server-side rate limits and abuse prevention on AI scanning and booking APIs | ⚠️ AI route role checks, process-local rate/concurrency limits and timeout tested; distributed/booking rate limits deferred |
 
 ## Deferred features — do not implement during the 2-day sprint
 

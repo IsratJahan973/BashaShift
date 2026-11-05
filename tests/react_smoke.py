@@ -75,18 +75,21 @@ with sync_playwright() as p:
     page.get_by_role('button', name='Publish moving request', exact=True).click()
     expect(page.get_by_role('heading', name='My requests', exact=True)).to_be_visible()
     assert db()['requests'][0]['status'] == 'open'
+    expect(page.get_by_text('Waiting for mover quotations.', exact=True)).to_be_visible()
 
     navigate('Mover desk')
     assert page.get_by_role('link', name='Call customer:').count() == 0
-    page.get_by_role('button', name='Accept / Offer', exact=True).click()
-    expect(page.get_by_role('button', name='Offer sent', exact=True)).to_be_disabled()
+    page.get_by_label('Your quotation (BDT)', exact=True).fill('2700')
+    page.get_by_role('button', name='Submit quotation', exact=True).click()
+    expect(page.get_by_role('button', name='Quotation submitted', exact=True)).to_be_disabled()
     navigate('My requests 1')
     page.get_by_role('button', name='Choose', exact=True).click()
     assert db()['requests'][0]['status'] == 'awaiting_call'
     page.get_by_role('button', name='Decline & reopen', exact=True).click()
     assert db()['requests'][0]['status'] == 'open'
     navigate('Mover desk')
-    page.get_by_role('button', name='Accept / Offer', exact=True).click()
+    page.get_by_label('Your quotation (BDT)', exact=True).fill('2800')
+    page.get_by_role('button', name='Submit quotation', exact=True).click()
     navigate('My requests 1')
     page.get_by_role('button', name='Choose', exact=True).click()
     page.get_by_role('button', name='Mark confirmed after call', exact=True).click()

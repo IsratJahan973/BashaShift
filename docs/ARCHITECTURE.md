@@ -74,17 +74,36 @@ DRAFT → OPEN (visible only to eligible area/category workers)
 
 ## AI endpoint behavior
 
-`POST /api/scan` takes `{ "image": "data:image/jpeg;base64,..." }` with a size and MIME check. Response:
+`POST /api/scan` takes `{ "images": ["data:image/jpeg;base64,..."], "consent": true }`.
+In production it requires a Bearer session verified against Supabase Auth and
+the protected renter profile. The backend alone holds the OpenAI key. It
+validates and re-encodes up to three photos (3 MiB each, 6 MiB total,
+20-megapixel decoded limit), strips metadata, and calls the Responses API with
+`store:false` and a strict catalog schema. Timeouts, rate limits, and bounded
+concurrency protect the route. Response:
 
 ```json
 {
-  "source": "live-ai",
+  "source": "openai",
   "model": "gpt-4.1-mini",
+  "reviewRequired": true,
   "items": [ { "name": "Bed", "qty": 1, "confidence": "high" } ]
 }
 ```
 
-These are **suggestions**, not verified detection counts. The user reviews every item. Empty recognized list, invalid input, unavailable API key, or provider errors produce honest messages and manual input fallback.
+These are **suggestions**, not verified detection counts. The user reviews every
+item; applying the review replaces the current inventory rather than adding to
+example counts. Missing items can be added manually. Empty recognized lists,
+invalid input, unavailable keys, or provider errors leave manual inventory
+unchanged. Photos remain ephemeral and are not stored with the request.
+
+The deterministic estimator uses the existing handling rates plus BDT 850
+vehicle base, BDT 45/km, and BDT 100 per combined floor if lift access at both
+buildings is absent, rounded up to BDT 50. The UI shows every term. AI does not
+set prices. The approved list and formula total use the existing
+`create_moving_request` RPC; RLS and private contact access are unchanged.
+See `AI_SETUP.md` for the formula, deployment setup, privacy, and limits, and
+`PHASE3_QA.md` for mocked vs real integration evidence.
 
 **Testing mandatory:** test with owned/permissioned furniture photographs, including multiple beds, boxes, irrelevant photos, poor lighting, and a photo with no furniture. Log expected vs recognized categories without claiming medical-grade/object-detection reliability. Check API cost and any provider image-retention policies.
 

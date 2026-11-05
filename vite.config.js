@@ -7,7 +7,11 @@ export default defineConfig(({ mode }) => {
   readSupabaseConfig(loadEnv(mode, process.cwd(), 'VITE_'));
   return {
   plugins: [react()],
-  server: { port: 5173, proxy: { '/api': 'http://localhost:8787' } },
+  server: {
+  port: 5190,
+  strictPort: true,
+  proxy: { '/api': 'http://localhost:8790' }
+},
   build: { rollupOptions: { output: { manualChunks(id) {
     if (id.includes('/node_modules/@supabase/') || id.includes('/node_modules/iceberg-js/')) return 'supabase';
   } } } },

@@ -60,3 +60,27 @@ export async function loginAccount(client, email, password) {
   if (error) throw error;
   return data;
 }
+
+export async function verifyAccountRole(client, userId, selectedRole) {
+  const { data, error } = await client.from('profiles').select('role').eq('id', userId).single();
+  if (error) throw error;
+  if (!Object.hasOwn(roles, data.role)) throw new Error('Your account role could not be verified. Contact support before continuing.');
+  if (data.role !== selectedRole) {
+    throw new Error(`This account is registered as ${roles[data.role] || 'another role'}. Select the matching role to sign in.`);
+  }
+  return data.role;
+}
+
+export async function requestPasswordReset(client, email, redirectTo) {
+  const address = email.trim();
+  if (!address || !address.includes('@')) throw new Error('Enter your email address.');
+  const { error } = await client.auth.resetPasswordForEmail(address, { redirectTo });
+  if (error) throw error;
+}
+
+export async function updateAccountPassword(client, password) {
+  if (!password || password.length < 8) throw new Error('Use a password with at least 8 characters.');
+  const { data, error } = await client.auth.updateUser({ password });
+  if (error) throw error;
+  return data;
+}

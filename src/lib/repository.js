@@ -84,10 +84,10 @@ export const archiveProperty = (client, id) => result(client.from('properties').
 export const createInquiry = (client, propertyId, form) => result(client.from('viewing_inquiries').insert({ property_id: propertyId,
   renter_name: form.name.trim(), renter_phone: form.phone.replace(/\D/g,''), preferred_date: form.date, message: form.message }));
 export const acknowledgeInquiry = (client, inquiry) => result(client.rpc('acknowledge_inquiry', { inquiry_id: inquiry.id, acknowledged: inquiry.status === 'requested' }));
-export const createMove = (client, move, estimate) => result(client.rpc('create_moving_request', {
+export const createMove = (client, move) => result(client.rpc('create_moving_request', {
   details: { property_id: move.listingId, from_area: move.fromArea, to_area: move.toArea, moving_date: move.date,
     km: Number(move.km), from_floor: Number(move.fromFloor), to_floor: Number(move.toFloor), has_lift: move.hasLift,
-    estimate, customer_name: move.customerName.trim(), customer_phone: move.customerPhone.replace(/\D/g,''),
+    estimate: 0, customer_name: move.customerName.trim(), customer_phone: move.customerPhone.replace(/\D/g,''),
     contact_consent: move.customerConsent, notes: move.notes }, inventory: move.items,
 }));
 export const sendOffer = (client, requestId, amount) => result(client.from('mover_offers').insert({ request_id: requestId, amount }));

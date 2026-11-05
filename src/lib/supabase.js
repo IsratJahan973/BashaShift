@@ -10,3 +10,14 @@ export const supabase = configuration?.configured ? createClient(configuration.u
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
 }) : null;
 export const supabaseConfigurationError = configurationError;
+
+let passwordRecoveryPending = false;
+if (supabase) {
+  supabase.auth.onAuthStateChange(event => {
+    if (event === 'PASSWORD_RECOVERY') passwordRecoveryPending = true;
+  });
+}
+
+export function isPasswordRecoveryPending() {
+  return passwordRecoveryPending;
+}

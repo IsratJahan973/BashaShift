@@ -1,23 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculateEstimate, matchesArea, addOffer, chooseOffer, declineAndReopen, safePhone } from '../src/domain.js';
+import { matchesArea, addOffer, chooseOffer, declineAndReopen, safePhone } from '../src/domain.js';
 const worker={id:'w',name:'Worker',area:'Banasree',skills:['Moving'],available:true};
-const req={id:'r',status:'open',fromArea:'Banasree',estimate:2500,offers:[]};
-test('price engine is deterministic and distinguishes staircase access',()=>{
-  const items=[{name:'Bed',qty:1},{name:'Boxes',qty:2}];
-  assert.equal(calculateEstimate({items,km:5,fromFloor:2,toFloor:3,hasLift:true}),1700);
-  assert.equal(calculateEstimate({items,km:5,fromFloor:2,toFloor:3,hasLift:false}),2200);
-  assert.equal(calculateEstimate({items:[],km:5}),0);
-});
+const req={id:'r',status:'open',fromArea:'Banasree',offers:[]};
 test('only available local movers receive requests',()=>{
   assert.equal(matchesArea(worker,req),true);
   assert.equal(matchesArea({...worker,area:'Uttara'},req),false);
   assert.equal(matchesArea({...worker,available:false},req),false);
 });
-test('acceptance does not confirm the job: customer selects explicitly',()=>{
+test('independent mover quotations are selected by renter before booking confirmation',()=>{
   const withOffer=addOffer(req,worker,2700);
   assert.equal(withOffer.status,'open');
   assert.equal(withOffer.offers[0].amount,2700);
+  assert.throws(()=>addOffer(req,worker,0),/valid price/);
   const chosen=chooseOffer(withOffer,withOffer.offers[0].id);
   assert.equal(chosen.status,'awaiting_call');
   assert.equal(chosen.offers[0].status,'selected');
